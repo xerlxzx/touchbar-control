@@ -17,6 +17,8 @@ FOUNDATION_EXPORT NSString *TBPowerStateName(TBPowerState state);
 @property(nonatomic, readonly) BOOL normalBrightnessAvailable;
 @property(nonatomic, copy, readonly) NSString *brightnessUnavailabilityReason;
 - (TBPowerState)readPowerState;
+- (NSTimeInterval)inputIdleSeconds; // NAN if unavailable. Reads elapsed time, never key events.
+- (BOOL)sessionAllowsControl; // Logged-in local session with an awake built-in display.
 - (TBBrightnessState *)readBrightnessState;
 - (BOOL)applyNormalBrightnessAtNits:(double)nits;
 - (BOOL)requestImmediateOff;

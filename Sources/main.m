@@ -25,6 +25,8 @@ static NSString *const TBBundleIdentifier = @"local.touchbarcontrol";
 - (BOOL)available { return YES; }
 - (NSString *)unavailabilityReason { return @""; }
 - (BOOL)normalBrightnessAvailable { return YES; }
+- (NSTimeInterval)inputIdleSeconds { return 0; }
+- (BOOL)sessionAllowsControl { return YES; }
 - (NSString *)brightnessUnavailabilityReason { return @""; }
 - (TBBrightnessState *)readBrightnessState {
     if (!self.brightnessState) [self applyNormalBrightnessAtNits:184.5];
@@ -85,6 +87,8 @@ static NSTextField *TBLabel(NSString *text, NSFont *font) {
 @property(nonatomic, strong) NSMenuItem *offActionMenuItem;
 @property(nonatomic, strong) NSMenuItem *onActionMenuItem;
 @property(nonatomic, strong) id activity;
+@property(nonatomic) BOOL systemSleeping;
+@property(nonatomic) BOOL screensSleeping;
 @end
 
 @implementation TBAppDelegate
@@ -122,6 +126,8 @@ static NSTextField *TBLabel(NSString *text, NSFont *font) {
     NSNotificationCenter *notifications = NSWorkspace.sharedWorkspace.notificationCenter;
     [notifications addObserver:self selector:@selector(willSleep:)
                           name:NSWorkspaceWillSleepNotification object:nil];
+    [notifications addObserver:self selector:@selector(willSleep:)
+                          name:NSWorkspaceScreensDidSleepNotification object:nil];
     [notifications addObserver:self selector:@selector(didWake:)
                           name:NSWorkspaceDidWakeNotification object:nil];
     [notifications addObserver:self selector:@selector(didWake:)
@@ -290,7 +296,7 @@ static NSTextField *TBLabel(NSString *text, NSFont *font) {
     self.offButton.controlSize = NSControlSizeLarge;
     self.onButton.controlSize = NSControlSizeLarge;
     self.offButton.toolTip = @"Keep the Touch Bar dark until you turn it on or quit this app.";
-    self.onButton.toolTip = @"Use the tested brighter setting for normal Touch Bar controls. Keep keyboard-backlight inactivity set to Never.";
+    self.onButton.toolTip = @"Use normal Touch Bar controls at your selected brightness, with automatic off after 55 seconds idle.";
     [buttons addArrangedSubview:self.offButton];
     [buttons addArrangedSubview:self.onButton];
     [stack addArrangedSubview:buttons];
@@ -307,6 +313,7 @@ static NSTextField *TBLabel(NSString *text, NSFont *font) {
     NSString *requested = controller.requestedOff ? @"Keep off" : [NSString stringWithFormat:@"On · %ld%% brightness", (long)controller.selectedBrightnessPercent];
     if (controller.failed) requested = [requested stringByAppendingString:@" · paused"];
     else if (controller.sleeping) requested = [requested stringByAppendingString:@" · sleeping"];
+    else if (controller.idleOff) requested = [requested stringByAppendingString:@" · idle"];
     else if (controller.holdingOff) requested = [requested stringByAppendingString:@" · active"];
     self.requestedLabel.stringValue = requested;
     NSInteger displayedPercent = self.brightnessSlider.trackingPointer
@@ -317,7 +324,7 @@ static NSTextField *TBLabel(NSString *text, NSFont *font) {
     self.brightnessSlider.enabled = controller.normalBrightnessAvailable;
     NSString *observed = TBPowerStateName(controller.observedState);
     if (!controller.sleeping && controller.observedState == TBPowerStateOn &&
-        !controller.requestedOff && isfinite(controller.brightnessState.driverNits) && controller.brightnessState) {
+        !controller.requestedOff && !controller.idleOff && isfinite(controller.brightnessState.driverNits) && controller.brightnessState) {
         observed = [NSString stringWithFormat:@"On · %.0f nits reported%@", controller.brightnessState.driverNits,
                     controller.brightnessVerified ? @" · verified" : @""];
     }
@@ -327,17 +334,17 @@ static NSTextField *TBLabel(NSString *text, NSFont *font) {
     BOOL messageChanged = ![self.messageLabel.stringValue isEqualToString:controller.message];
     self.messageLabel.stringValue = controller.message;
     self.messageLabel.textColor = controller.failed ? NSColor.systemRedColor : NSColor.labelColor;
-    BOOL canRetryOff = controller.available && !controller.holdingOff;
+    BOOL canRetryOff = controller.available && (!controller.holdingOff || controller.idleOff);
     self.offButton.enabled = canRetryOff;
     self.onButton.enabled = controller.available && controller.normalBrightnessAvailable;
     self.offMenuItem.enabled = canRetryOff;
     self.onMenuItem.enabled = self.onButton.enabled;
     self.offActionMenuItem.enabled = canRetryOff;
     self.onActionMenuItem.enabled = self.onButton.enabled;
-    self.offMenuItem.state = controller.holdingOff ? NSControlStateValueOn : NSControlStateValueOff;
+    self.offMenuItem.state = controller.holdingOff && controller.requestedOff ? NSControlStateValueOn : NSControlStateValueOff;
     self.onMenuItem.state = (!controller.requestedOff && !controller.failed) ? NSControlStateValueOn : NSControlStateValueOff;
     self.statusLine.title = [NSString stringWithFormat:@"Touch Bar: %@%@", TBPowerStateName(controller.observedState),
-                            controller.failed ? @" · control paused" : controller.holdingOff ? @" · keeping off" : @""];
+                            controller.failed ? @" · control paused" : controller.idleOff ? @" · idle protection" : controller.holdingOff ? @" · keeping off" : @""];
     self.statusItem.button.toolTip = self.statusLine.title;
     BOOL needsActivity = (controller.holdingOff || controller.guardingBrightness) && !controller.sleeping;
     if (needsActivity && !self.activity) {
@@ -374,13 +381,16 @@ static NSTextField *TBLabel(NSString *text, NSFont *font) {
     [NSApp activateIgnoringOtherApps:YES];
 }
 - (void)willSleep:(NSNotification *)notification {
-    (void)notification;
+    if ([notification.name isEqualToString:NSWorkspaceWillSleepNotification]) self.systemSleeping = YES;
+    else self.screensSleeping = YES;
     [self.controller prepareForSleep];
     [self refresh];
 }
 - (void)didWake:(NSNotification *)notification {
-    (void)notification;
-    [self.controller resumeAtTime:NSProcessInfo.processInfo.systemUptime];
+    if ([notification.name isEqualToString:NSWorkspaceDidWakeNotification]) self.systemSleeping = NO;
+    else self.screensSleeping = NO;
+    if (!self.systemSleeping && !self.screensSleeping)
+        [self.controller resumeAtTime:NSProcessInfo.processInfo.systemUptime];
     [self refresh];
 }
 - (BOOL)applicationShouldHandleReopen:(NSApplication *)sender hasVisibleWindows:(BOOL)flag {
@@ -433,16 +443,17 @@ int main(int argc, const char *argv[]) {
             return state == TBPowerStateUnknown ? 3 : 0;
         }
         if (argc == 2 && strcmp(argv[1], "--version") == 0) {
-            puts("Touch Bar Control 1.2.0");
+            puts("Touch Bar Control 1.3.0");
             return 0;
         }
         if (argc == 2 && strcmp(argv[1], "--help") == 0) {
-            puts("Usage: Touch Bar Control [--status | --brightness-status | --preview | --resume-on | --restore-original-policy | --version | --help]\n"
+            puts("Usage: Touch Bar Control [--status | --brightness-status | --activity-status | --preview | --resume-on | --restore-original-policy | --version | --help]\n"
                  "No arguments: open the app and keep the Touch Bar off.\n"
                  "--status: read hardware power state without sending commands.\n"
                  "--brightness-status: read brightness telemetry without sending commands.\n"
+                 "--activity-status: read input-idle time and session eligibility; no key events or commands.\n"
                  "--preview: open a simulated UI; never access hardware.\n"
-                 "--resume-on: monitor/reapply bright On mode without a power-on command.\n"
+                 "--resume-on: adopt On mode without an initial power-on command; includes idle protection.\n"
                  "--restore-original-policy: explicitly restore this Mac's original Touch Bar minimum0 and automatic brightness. Quit the app first; flashing may return.");
             return 0;
         }
@@ -450,6 +461,13 @@ int main(int argc, const char *argv[]) {
             TBRealHardware *hardware = [TBRealHardware new];
             TBPrintJSON(@{@"read_only":@YES, @"brightness":TBBrightnessJSON(hardware), @"powerState":@(TBReadPowerState())});
             return hardware.normalBrightnessAvailable ? 0 : 3;
+        }
+        if (argc == 2 && strcmp(argv[1], "--activity-status") == 0) {
+            TBRealHardware *hardware = [TBRealHardware new];
+            NSTimeInterval idle = [hardware inputIdleSeconds];
+            TBPrintJSON(@{@"read_only":@YES, @"inputIdleSeconds":TBJSONNumber(idle),
+                          @"sessionAllowsControl":@([hardware sessionAllowsControl]), @"idleOffDelaySeconds":@55});
+            return isfinite(idle) && idle >= 0 ? 0 : 3;
         }
         BOOL preview = argc == 2 && strcmp(argv[1], "--preview") == 0;
         BOOL resumeOn = argc == 2 && strcmp(argv[1], "--resume-on") == 0;

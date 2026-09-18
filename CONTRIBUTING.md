@@ -11,7 +11,7 @@ Use macOS with Apple's Command Line Tools:
 ./test.sh
 ```
 
-The tests use fake hardware and an in-memory preference store. They do not link the real hardware provider or send Touch Bar commands. They cover retry limits, power transitions, brightness mapping, slider persistence, and recovery from missing readings.
+The tests use fake hardware and an in-memory preference store. They do not link the real hardware provider or send Touch Bar commands. They cover retry limits, power transitions, brightness mapping, saved choices, idle Off and activity recovery, lock/sleep gating, and missing readings.
 
 Quit other app instances before opening a preview:
 
@@ -47,6 +47,7 @@ These commands read state without sending control commands:
 ```sh
 "./Touch Bar Control.app/Contents/MacOS/Touch Bar Control" --status
 "./Touch Bar Control.app/Contents/MacOS/Touch Bar Control" --brightness-status
+"./Touch Bar Control.app/Contents/MacOS/Touch Bar Control" --activity-status
 ```
 
 Review output and screenshots before posting. Remove serial numbers, account details, and private paths. Short readings around the event help more than a full system dump.

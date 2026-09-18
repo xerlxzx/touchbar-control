@@ -6,6 +6,7 @@
 #include <dlfcn.h>
 #include <math.h>
 #include <sys/sysctl.h>
+#include <unistd.h>
 
 @interface NSObject (TBPrivateBrightnessClient)
 - (BOOL)turnOffWithPeriod:(float)period;
@@ -206,7 +207,7 @@ NSString *TBPowerStateName(TBPowerState state) {
 }
 
 - (BOOL)applyNormalBrightnessAtNits:(double)nits {
-    if (!_normalBrightnessAvailable) return NO;
+    if (!_normalBrightnessAvailable || ![self sessionAllowsControl]) return NO;
     @try {
         TBBrightnessState *state = [self readBrightnessState];
         // Revalidate identity and active state immediately before any write.
@@ -237,13 +238,44 @@ NSString *TBPowerStateName(TBPowerState state) {
 - (BOOL)available { return _available; }
 - (NSString *)unavailabilityReason { return _unavailabilityReason; }
 - (TBPowerState)readPowerState { return TBReadPowerState(); }
+- (NSTimeInterval)inputIdleSeconds {
+    io_service_t service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("IOHIDSystem"));
+    if (!service) return NAN;
+    CFTypeRef raw = IORegistryEntryCreateCFProperty(service, CFSTR("HIDIdleTime"), kCFAllocatorDefault, 0);
+    IOObjectRelease(service);
+    double nanoseconds = NAN;
+    if (raw) {
+        if (CFGetTypeID(raw) == CFNumberGetTypeID())
+            CFNumberGetValue(raw, kCFNumberDoubleType, &nanoseconds);
+        CFRelease(raw);
+    }
+    return isfinite(nanoseconds) && nanoseconds >= 0 ? nanoseconds / 1e9 : NAN;
+}
+- (BOOL)sessionAllowsControl {
+    NSDictionary *session = CFBridgingRelease(CGSessionCopyCurrentDictionary());
+    NSNumber *console = session[(__bridge NSString *)kCGSessionOnConsoleKey];
+    NSNumber *loggedIn = session[(__bridge NSString *)kCGSessionLoginDoneKey];
+    NSNumber *uid = session[(__bridge NSString *)kCGSessionUserIDKey];
+    id locked = session[@"CGSSessionScreenIsLocked"];
+    if (![console isKindOfClass:NSNumber.class] || !console.boolValue ||
+        ![loggedIn isKindOfClass:NSNumber.class] || !loggedIn.boolValue ||
+        ![uid isKindOfClass:NSNumber.class] || uid.unsignedIntValue != getuid() ||
+        (locked && (![locked isKindOfClass:NSNumber.class] || [locked boolValue]))) return NO;
+    // A closed lid or sleeping built-in display must not trigger a Touch Bar wake.
+    CGDirectDisplayID displays[16];
+    uint32_t count = 0;
+    if (CGGetActiveDisplayList(16, displays, &count) != kCGErrorSuccess) return NO;
+    for (uint32_t index = 0; index < count; index++)
+        if (CGDisplayIsBuiltin(displays[index]) && !CGDisplayIsAsleep(displays[index])) return YES;
+    return NO;
+}
 - (BOOL)requestImmediateOff {
     if (!_available) return NO;
     @try { return [_client turnOffWithPeriod:0.0f]; }
     @catch (NSException *exception) { (void)exception; return NO; }
 }
 - (BOOL)requestOn {
-    if (!_available) return NO;
+    if (!_available || ![self sessionAllowsControl]) return NO;
     @try { return [_client turnOn]; }
     @catch (NSException *exception) { (void)exception; return NO; }
 }

@@ -25,12 +25,15 @@ static NSUInteger assertions = 0;
 @property(nonatomic) NSUInteger brightnessCalls;
 @property(nonatomic) NSUInteger brightnessReads;
 @property(nonatomic) double lastRequestedNits;
+@property(nonatomic) NSTimeInterval inputIdleSeconds;
+@property(nonatomic) BOOL sessionAllowsControl;
 @property(nonatomic, weak) TBController *controller;
 @end
 @implementation FakeHardware
 - (instancetype)init {
     if (!(self = [super init])) return nil;
     _available = YES;
+    _sessionAllowsControl = YES;
     _unavailabilityReason = @"Unavailable in test";
     _state = TBPowerStateOff;
     _acceptOff = YES;
@@ -252,7 +255,7 @@ int main(void) {
         [controller stop];
         CHECK(hardware.onCalls == 0 && hardware.brightnessCalls == writesBeforeOff);
 
-        // Idle dimming is reported, never counteracted with brightness writes.
+        // Unexpected early dimming skips to Off instead of writing a brighter target.
         hardware = [FakeHardware new];
         hardware.state = TBPowerStateOn;
         hardware.brightnessState.dimmingStep = 1;
@@ -260,8 +263,13 @@ int main(void) {
         hardware.brightnessState.driverNits = 28;
         controller = MakeController(hardware);
         [controller resumeOnAtTime:0];
+        CHECK(controller.idleOff && hardware.offCalls == 1);
+        hardware.state = TBPowerStateOff;
+        hardware.inputIdleSeconds = 60;
         [controller pollAtTime:60];
         CHECK(!controller.brightnessVerified && !controller.failed && hardware.brightnessCalls == 0);
+        hardware.state = TBPowerStateOn;
+        hardware.inputIdleSeconds = 0;
         hardware.brightnessState.dimmingStep = 0;
         [controller pollAtTime:61];
         CHECK(hardware.brightnessCalls == 1);
@@ -440,6 +448,206 @@ int main(void) {
         hardware.brightnessState.hardwareMaximumNits = 357.099;
         [controller turnOnAtTime:6];
         CHECK(!controller.failed && controller.brightnessVerified);
+        // Idle protection starts at 55 seconds, before the native 60-second dim.
+        hardware = [FakeHardware new];
+        hardware.state = TBPowerStateOn;
+        hardware.inputIdleSeconds = 54.99;
+        controller = MakeController(hardware);
+        [controller resumeOnAtTime:100];
+        CHECK(!controller.idleOff && hardware.offCalls == 0 && controller.brightnessVerified);
+        hardware.inputIdleSeconds = 55;
+        [controller pollAtTime:100.01];
+        CHECK(controller.idleOff && controller.holdingOff && !controller.requestedOff);
+        CHECK(hardware.offCalls == 1 && hardware.onCalls == 0 && !controller.brightnessVerified);
+        [controller pollAtTime:100.02];
+        CHECK(hardware.offCalls == 1); // No repeated zero-fade calls during the first second.
+        hardware.state = TBPowerStateOff;
+        hardware.inputIdleSeconds = 80;
+        [controller pollAtTime:125.01];
+        CHECK(controller.idleOff && hardware.brightnessCalls == 0 && hardware.onCalls == 0);
+        [controller setBrightnessPercent:80 atTime:125.02];
+        CHECK(controller.idleOff && hardware.brightnessCalls == 0 && hardware.onCalls == 0);
+        // Real input after the hold wakes once, then reapplies the saved target.
+        hardware.inputIdleSeconds = 0.1;
+        [controller pollAtTime:126];
+        CHECK(!controller.idleOff && !controller.holdingOff && hardware.onCalls == 1);
+        [controller pollAtTime:126.1];
+        CHECK(hardware.onCalls == 1 && hardware.brightnessCalls == 0);
+        hardware.state = TBPowerStateOn;
+        hardware.brightnessState.physicalNits = 12;
+        hardware.brightnessState.driverNits = 12;
+        [controller pollAtTime:126.2];
+        CHECK(hardware.brightnessCalls == 1 && fabs(hardware.lastRequestedNits - 288.059) < 0.001);
+        [controller pollAtTime:126.8];
+        CHECK(controller.brightnessVerified && !controller.failed);
+
+        // Manual Off replaces idle Off and cannot be reversed by activity or wake.
+        hardware.inputIdleSeconds = 56;
+        [controller pollAtTime:182];
+        CHECK(controller.idleOff);
+        [controller keepOffAtTime:182.1];
+        hardware.state = TBPowerStateOff;
+        hardware.inputIdleSeconds = 0;
+        [controller pollAtTime:183];
+        [controller prepareForSleep];
+        [controller resumeAtTime:184];
+        CHECK(controller.requestedOff && controller.holdingOff && !controller.idleOff);
+        CHECK(hardware.onCalls == 1 && hardware.brightnessCalls == 1);
+
+        // No immediate wake on adoption while already idle; no timer causes wake by itself.
+        hardware = [FakeHardware new];
+        hardware.inputIdleSeconds = 60;
+        controller = MakeController(hardware);
+        [controller turnOnAtTime:0];
+        CHECK(controller.idleOff && hardware.onCalls == 0 && hardware.offCalls == 0);
+        hardware.inputIdleSeconds = 120;
+        [controller pollAtTime:60];
+        CHECK(controller.idleOff && hardware.onCalls == 0);
+        hardware.state = TBPowerStateOn; // macOS reactivates while the user remains idle.
+        [controller pollAtTime:61];
+        CHECK(hardware.offCalls == 1 && hardware.onCalls == 0);
+
+        // Unknown/invalid activity keeps the strip off and never counts as new input.
+        hardware = [FakeHardware new];
+        hardware.state = TBPowerStateOn;
+        hardware.inputIdleSeconds = NAN;
+        controller = MakeController(hardware);
+        [controller resumeOnAtTime:10];
+        CHECK(controller.idleOff && hardware.offCalls == 1 && hardware.brightnessCalls == 0);
+        hardware.state = TBPowerStateOff;
+        hardware.inputIdleSeconds = -1;
+        [controller pollAtTime:20];
+        hardware.inputIdleSeconds = INFINITY;
+        [controller pollAtTime:30];
+        hardware.inputIdleSeconds = 31;
+        [controller pollAtTime:40];
+        CHECK(controller.idleOff && hardware.onCalls == 0);
+        hardware.inputIdleSeconds = 0.1;
+        [controller pollAtTime:41];
+        CHECK(hardware.onCalls == 1 && !controller.idleOff);
+
+        // A locked/inactive/asleep display blocks automatic On and brightness writes.
+        hardware = [FakeHardware new];
+        hardware.state = TBPowerStateOn;
+        hardware.inputIdleSeconds = 55;
+        controller = MakeController(hardware);
+        [controller resumeOnAtTime:0];
+        hardware.state = TBPowerStateOff;
+        hardware.sessionAllowsControl = NO;
+        hardware.inputIdleSeconds = 0;
+        [controller pollAtTime:10];
+        CHECK(controller.idleOff && hardware.onCalls == 0 && hardware.brightnessCalls == 0);
+        hardware.sessionAllowsControl = YES;
+        [controller pollAtTime:11];
+        CHECK(hardware.onCalls == 0); // A reset idle clock during unlock isn't fresh input.
+        hardware.inputIdleSeconds = 1;
+        [controller pollAtTime:12];
+        CHECK(hardware.onCalls == 0);
+        hardware.inputIdleSeconds = 0.05;
+        [controller pollAtTime:12.5];
+        CHECK(hardware.onCalls == 1);
+
+        // The sleep notification blocks reads; wake requires fresh post-wake activity.
+        hardware = [FakeHardware new];
+        hardware.state = TBPowerStateOn;
+        hardware.inputIdleSeconds = 55;
+        controller = MakeController(hardware);
+        [controller resumeOnAtTime:0];
+        hardware.state = TBPowerStateOff;
+        [controller prepareForSleep];
+        NSUInteger idleSleepReads = hardware.reads;
+        [controller pollAtTime:60];
+        CHECK(hardware.reads == idleSleepReads && hardware.onCalls == 0);
+        hardware.inputIdleSeconds = 0;
+        [controller resumeAtTime:61];
+        CHECK(hardware.onCalls == 0 && controller.idleOff);
+        hardware.inputIdleSeconds = 1;
+        [controller pollAtTime:62];
+        CHECK(hardware.onCalls == 0);
+        hardware.inputIdleSeconds = 0.1;
+        [controller pollAtTime:62.5];
+        CHECK(hardware.onCalls == 1 && !controller.idleOff);
+
+        // Rejected or unverified automatic Off remains bounded, without auto-recovery.
+        hardware = [FakeHardware new];
+        hardware.state = TBPowerStateOn;
+        hardware.inputIdleSeconds = 55;
+        hardware.acceptOff = NO;
+        controller = MakeController(hardware);
+        [controller resumeOnAtTime:0];
+        [controller pollAtTime:1];
+        CHECK(controller.failed && hardware.offCalls == 1 && hardware.onCalls == 0);
+        hardware = [FakeHardware new];
+        hardware.state = TBPowerStateOn;
+        hardware.inputIdleSeconds = 55;
+        controller = MakeController(hardware);
+        [controller resumeOnAtTime:0];
+        [controller pollAtTime:1];
+        [controller pollAtTime:2];
+        [controller pollAtTime:3];
+        CHECK(controller.failed && hardware.offCalls == 3);
+        hardware.inputIdleSeconds = 0;
+        [controller pollAtTime:4];
+        CHECK(hardware.onCalls == 0 && hardware.offCalls == 3);
+
+        // Missing power telemetry during input cannot authorize an automatic On.
+        hardware = [FakeHardware new];
+        hardware.inputIdleSeconds = 55;
+        controller = MakeController(hardware);
+        [controller resumeOnAtTime:0];
+        hardware.state = TBPowerStateUnknown;
+        hardware.inputIdleSeconds = 0;
+        [controller pollAtTime:1];
+        [controller pollAtTime:3];
+        CHECK(controller.failed && hardware.onCalls == 0 && hardware.offCalls == 0);
+
+        // A rejected activity wake latches failure and cannot repeat on a timer.
+        hardware = [FakeHardware new];
+        hardware.inputIdleSeconds = 55;
+        hardware.acceptOn = NO;
+        controller = MakeController(hardware);
+        [controller resumeOnAtTime:0];
+        hardware.inputIdleSeconds = 0;
+        [controller pollAtTime:1];
+        [controller pollAtTime:10];
+        CHECK(controller.failed && hardware.onCalls == 1 && hardware.brightnessCalls == 0);
+
+        // On selected in a blocked session sends no power or brightness writes.
+        hardware = [FakeHardware new];
+        hardware.sessionAllowsControl = NO;
+        controller = MakeController(hardware);
+        [controller turnOnAtTime:0];
+        hardware.state = TBPowerStateOn;
+        hardware.brightnessState.physicalNits = 12;
+        [controller pollAtTime:1];
+        CHECK(hardware.onCalls == 0 && hardware.offCalls == 0 && hardware.brightnessCalls == 0);
+        hardware.sessionAllowsControl = YES;
+        [controller pollAtTime:2];
+        CHECK(hardware.brightnessCalls == 1 && hardware.onCalls == 0);
+
+        // If macOS wakes first on input, don't send another On or dip brightness again.
+        hardware = [FakeHardware new];
+        hardware.inputIdleSeconds = 55;
+        controller = MakeController(hardware);
+        [controller resumeOnAtTime:0];
+        hardware.state = TBPowerStateOn;
+        hardware.inputIdleSeconds = 0;
+        hardware.brightnessState.physicalNits = 12;
+        hardware.brightnessState.driverNits = 12;
+        [controller pollAtTime:1];
+        CHECK(hardware.onCalls == 0 && hardware.brightnessCalls == 1 && !controller.idleOff);
+
+        // Quit stops idle enforcement, even if macOS wakes the strip afterward.
+        hardware = [FakeHardware new];
+        hardware.inputIdleSeconds = 55;
+        controller = MakeController(hardware);
+        [controller resumeOnAtTime:0];
+        [controller stop];
+        hardware.state = TBPowerStateOn;
+        hardware.inputIdleSeconds = 0;
+        [controller pollAtTime:1];
+        CHECK(!controller.idleOff && hardware.onCalls == 0 && hardware.offCalls == 0 && hardware.brightnessCalls == 0);
+
         printf("PASS: %lu controller safety assertions. No real hardware provider linked.\n", (unsigned long)assertions);
     }
     return 0;
