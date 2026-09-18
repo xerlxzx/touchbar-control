@@ -1,106 +1,44 @@
 # Touch Bar Control
 
-A small native macOS app for turning the Touch Bar off and choosing a fixed brightness. It includes a menu bar control and a slider with six steps, from 50% to 100%.
+Keep your MacBook's Touch Bar off, or turn it on at a brightness you choose.
 
-**Experimental:** testing covers one M1 MacBook Pro. Version 1.3 adds automatic Off after 55 seconds of inactivity to skip the macOS dimming interval associated with flashing. A live test confirmed the early-dimming fallback and brightness recovery; the observer reported that the cycle worked. The proactive cutoff and longer-term behavior still need validation. Read the [known issues](docs/known-issues.md) before using On mode.
+## Download and install
 
-## Compatibility
+**[Download Touch Bar Control v1.3.0](https://github.com/xerlxzx/touchbar-control/releases/download/v1.3.0/Touch-Bar-Control-1.3.0-arm64.zip)** · [Release notes](https://github.com/xerlxzx/touchbar-control/releases/tag/v1.3.0)
 
-| Item | Current scope |
+Install the app through Finder:
+
+1. **Download** the ZIP using the link above.
+2. **Open your Downloads folder** and double-click the ZIP to unpack it. Skip this step if you can see the app in Downloads.
+3. **Drag Touch Bar Control into Applications** in Finder's sidebar. Quit any older copy before replacing it.
+4. **Open Touch Bar Control** from Applications.
+
+**If macOS can't verify the developer:** after trying to open it, go to **System Settings → Privacy & Security**, scroll down, and choose **Open Anyway**, then **Open**. Use this exception for a copy you trust from this repository. This release uses a local signature; Apple hasn't notarized it. See [Apple's instructions](https://support.apple.com/en-au/102445) for the developer-verification warning.
+
+**The Touch Bar turns off when the app opens.** Choose **Turn Touch Bar on** in the app if you want it back on.
+
+Use this **experimental release on an Apple Silicon Mac**. The developer tested it on one **13-inch M1 MacBook Pro with a Touch Bar**, running macOS 26.6.2. You can adjust brightness on that model. The download won't run on Intel Macs.
+
+## Everyday use
+
+| What you want | What to do |
 | --- | --- |
-| Tested hardware | M1 MacBook Pro, `MacBookPro17,1` |
-| Tested system | macOS 26.6.2 |
-| Brightness controls | Code restricts them to `MacBookPro17,1` |
-| Other Touch Bar Macs | Untested; Off support depends on available private APIs and driver state |
+| Keep the Touch Bar dark | Choose **Keep Touch Bar off**. It stays off until you choose On. |
+| Use the Touch Bar | Choose **Turn Touch Bar on**. Your usual buttons stay in place. |
+| Change its brightness | Move the slider between 50% and 100%. You can save a brightness choice while the Touch Bar is off. |
+| Find the window again | Click the app's menu bar or Dock icon. Closing the window keeps the app running. |
+| Stop the app | Choose **Quit** from its menu. Quitting doesn't turn the Touch Bar back on or reset its brightness settings. |
 
-The app uses Apple's private `DFRBrightness` and `CoreBrightness` frameworks. macOS updates can change these interfaces. The build target is macOS 12 or later, which does not establish compatibility with those earlier releases.
+While On, the Touch Bar switches off after 55 seconds without input and comes back when you use the keyboard or trackpad. The app remembers your brightness choice, but starts Off each time you open it. Open it from Applications after logging in.
 
-## Build and open
+## Help and project information
 
-Install Apple's Command Line Tools, then run:
-
-```sh
-git clone https://github.com/xerlxzx/touchbar-control.git
-cd touchbar-control
-./build.sh
-./test.sh
-open "./Touch Bar Control.app"
-```
-
-The build script compiles for the current Mac and creates a local ad-hoc signature. It requires no package manager or full Xcode project. The resulting app has no Developer ID signature or notarization for distribution.
-
-Opening the app starts **Keep off** mode. To inspect the interface without controlling the Touch Bar, quit any running instance and use:
-
-```sh
-"./Touch Bar Control.app/Contents/MacOS/Touch Bar Control" --preview
-```
-
-Preview uses simulated hardware and an in-memory brightness preference.
-
-## Use the controls
-
-- **Keep Touch Bar off** requests an immediate off transition and watches for macOS turning the strip on again.
-- **Turn Touch Bar on** enables the strip, applies the selected brightness, and checks its readings. After 55 seconds without input, it switches the strip off. New keyboard or trackpad activity restores On and your brightness. It leaves your Touch Bar buttons and layout intact.
-- **Off while idle** differs from manual **Keep off**. Activity wakes the idle state; manual Off stays off until you select On.
-- **Brightness** snaps to 50%, 60%, 70%, 80%, 90%, or 100%. Release the slider to apply a choice. Changing it while off saves the choice for later without lighting the strip.
-- **Requested** shows your chosen mode. **Observed** shows the driver's reported state. **Verified** means the software readings match the selected target.
-
-The app saves the brightness percentage. A normal launch starts Off even if the last session used On. Closing the window keeps control running; use the menu bar icon or Dock icon to reopen it. Quitting stops monitoring and leaves the brightness policy in place. It does not send an On command or install a login item.
-
-Use **Command–Shift–O** for Off and **Command–Shift–I** for On while the app has focus.
-
-### Brightness limits
-
-On mode disables automatic brightness for the Touch Bar, sets its minimum policy to `0.25`, and requests the selected level in nits. The main display retains its settings.
-
-The code contains a **fixed lower limit of 184.5 nits**, based on the working level observed on the test Mac. This is not a proven threshold for other panels. The upper limit comes from the Touch Bar driver. On the test Mac, the six steps span about 184.5 to 357.1 nits.
-
-The app leaves keyboard-backlight inactivity settings alone. Setting that timer to **Never** avoids a shorter keyboard dim timer but does not disable the Touch Bar's separate 60-second timer. Version 1.3 requests immediate Off at 55 seconds. If dimming starts sooner or the timer runs late, it requests immediate Off on detecting that dimming. See [idle dimming and flashing](docs/known-issues.md#idle-dimming-and-flashing).
-
-Automatic wake requires an unlocked local session, an awake built-in display, and new input after the idle hold. Missing activity readings keep the strip off. The app reads elapsed input-idle time without recording keys, pointer positions, or input events. It does not request Input Monitoring or prevent system sleep.
-
-## Command-line access
-
-Run these options on the executable inside the app bundle:
-
-| Option | Effect |
-| --- | --- |
-| `--status` | Read the Touch Bar power state; no control commands |
-| `--brightness-status` | Read brightness, policy, and driver limits; no setters |
-| `--activity-status` | Read elapsed input-idle time and session eligibility; no input events or setters |
-| `--preview` | Open the interface with simulated hardware |
-| `--resume-on` | Adopt On mode without an initial power-on command; includes idle Off and activity recovery |
-| `--version`, `--help` | Print version or usage information |
-
-For example:
-
-```sh
-"./Touch Bar Control.app/Contents/MacOS/Touch Bar Control" --brightness-status
-```
-
-Quit the current instance before using preview or resume mode. Use `--resume-on` during a controlled app update to avoid a default-Off launch.
-
-### Return to the fixed baseline policy
-
-The existing `--restore-original-policy` command has a misleading name: **it sets minimum brightness to 0 and automatic brightness to enabled. It does not recover your Mac's saved prior settings.** Those fixed values matched the original policy on the test Mac.
-
-Quit the app before running this command. Lower brightness may bring flashing back.
-
-```sh
-"./Touch Bar Control.app/Contents/MacOS/Touch Bar Control" --restore-original-policy
-```
-
-The command prints before/after readings and checks the two policy values. It sends no power-on command. It leaves the keyboard inactivity setting and saved slider choice intact. Exit code 4 means another app instance prevented the action; exit code 5 means the command could not verify completion. Inspect the output after a failure because one setting may have changed before the other failed.
-
-Off and Quit do not run this command.
-
-## Development
-
-Read [CONTRIBUTING.md](CONTRIBUTING.md) for the source layout, tests, and bug reports. Use a separate output path to build an update without replacing a running copy:
-
-```sh
-./build.sh 'work/staged/Touch Bar Control.app'
-```
+- [Known issue: brief flashes on wake](docs/known-issues.md)
+- [Report a problem](https://github.com/xerlxzx/touchbar-control/issues)
+- [Technical details and command-line options](docs/technical-reference.md)
+- [Contributing and running tests](CONTRIBUTING.md)
+- [Engineering structure and next steps](docs/engineering.md)
+- [What's changed](CHANGELOG.md)
 
 ## License
 
