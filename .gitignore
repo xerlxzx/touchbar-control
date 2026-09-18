@@ -1,0 +1,7 @@
+# Local builds and investigation artifacts
+*.app/
+*.dSYM/
+work/
+
+# Finder metadata
+.DS_Store
