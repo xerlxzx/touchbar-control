@@ -3,6 +3,7 @@
 @interface TBController : NSObject
 @property(nonatomic, readonly) BOOL requestedOff;
 @property(nonatomic, readonly) BOOL holdingOff;
+@property(nonatomic, readonly) BOOL idleOff;
 @property(nonatomic, readonly) BOOL sleeping;
 @property(nonatomic, readonly) BOOL failed;
 @property(nonatomic, readonly) BOOL available;

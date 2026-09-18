@@ -2,7 +2,7 @@
 
 ## Idle dimming and flashing
 
-**Status: unresolved.** A user reported that the Touch Bar dims after about 60 seconds without keyboard activity, flashes for 10–15 seconds, then appears to turn off. The keyboard-backlight inactivity timer was set to **Never**.
+**Status: v1.3 installed on the test Mac; live validation is incomplete.** A user reported that the Touch Bar dims after about 60 seconds without keyboard activity, flashes for 10–15 seconds, then appears to turn off. The keyboard-backlight inactivity timer was set to **Never**.
 
 A read-only capture on version 1.2 confirmed the software transition below. Times refer to the reported input-idle duration.
 
@@ -19,16 +19,21 @@ Inspection of the installed TouchBarServer binary also found a 60-second default
 
 The observer confirmed visible flashing during the dim interval in this coordinated capture. The trace records software states, not optical measurements. Together they associate the flashing with the low-brightness idle phase, but do not identify a failed hardware component.
 
-The current controller suspends brightness writes during a nonzero dimming step and waits for macOS after the driver reports Off. It therefore leaves this low-brightness phase intact. The keyboard-backlight **Never** setting does not provide a complete workaround.
+The v1.2 controller suspends brightness writes during a nonzero dimming step and waits for macOS after the driver reports Off. It therefore leaves this low-brightness phase intact. The keyboard-backlight **Never** setting does not provide a complete workaround.
 
-### Candidate approaches
+### Version 1.3 idle protection
 
-Future work could test either of these approaches:
+On mode requests immediate Off after 55 seconds of input inactivity, before the observed 60-second dim transition. It holds Off through idle and reapplies the selected brightness after new activity. Manual Off remains separate and does not wake on activity.
 
-- Request immediate Off at idle entry to skip the low-brightness phase, while preserving reactivation on user input.
-- Investigate a Touch Bar-specific dimming control that avoids changing the main display or keyboard policy.
+If the app detects a nonzero dimming step before the idle guard runs, it skips the remaining dim phase with an immediate Off request. This fallback reacts after dimming begins, so a brief flash may still occur with a shorter keyboard timer or delayed polling.
 
-Neither approach is implemented or verified. Wake behavior, failure handling, and visible flashing need testing before either can become an app feature.
+Automatic On and brightness writes require an unlocked local session and an awake built-in display. Lock, display sleep, and system sleep suspend automatic recovery. After an idle hold spans one of those transitions, recovery requires new input after the session becomes eligible; the first unlock action may therefore leave the strip off until another input. Missing idle readings keep the strip off. Rejected commands or sustained missing power readings stop retries.
+
+Hardware-free tests cover the 55-second boundary, input recovery, manual Off priority, lock/sleep gating, missing activity readings, and bounded failures.
+
+In the first live recording, native dimming began when the system input-idle counter read about 43 seconds. The app's fallback cut driver power within 0.413 seconds of the first dim sample, and the strip remained off for the rest of the two-minute capture. Subsequent input restored the selected 50% brightness, with readbacks of 184.5 physical nits and 184 driver nits. The reason the native timer and system idle counter differed is not established.
+
+The observer reported that idle Off and brightness recovery worked in this cycle. This result supports the workaround, but does not verify the proactive 55-second cutoff or longer-term behavior. Physical lock/sleep testing also remains pending. These checks do not establish a cure for panel faults or guarantee flash-free wake transitions.
 
 Use **Keep Touch Bar off** if On mode causes recurring flashes. Include your model identifier, macOS version, and symptom timing in a bug report. [CONTRIBUTING.md](../CONTRIBUTING.md) lists read-only status commands.
 
