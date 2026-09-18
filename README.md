@@ -13,7 +13,9 @@ Install the app through Finder:
 3. **Drag Touch Bar Control into Applications** in Finder's sidebar. Quit any older copy before replacing it.
 4. **Open Touch Bar Control** from Applications.
 
-**If macOS can't verify the developer:** after trying to open it, go to **System Settings → Privacy & Security**, scroll down, and choose **Open Anyway**, then **Open**. Use this exception for a copy you trust from this repository. This release uses a local signature; Apple hasn't notarized it. See [Apple's instructions](https://support.apple.com/en-au/102445) for the developer-verification warning.
+**Apple's first-launch warning:** macOS may say it cannot verify that Touch Bar Control is free of malware, or that it cannot verify the developer. This release uses a local signature and has no Apple notarization.
+
+To open a copy you trust from this repository, dismiss that warning, then go to **System Settings → Privacy & Security**. Scroll down, choose **Open Anyway**, and confirm **Open**. See [Apple's instructions](https://support.apple.com/en-au/102445) for details.
 
 **The Touch Bar turns off when the app opens.** Choose **Turn Touch Bar on** in the app if you want it back on.
 
