@@ -2,6 +2,8 @@
 #import "TBBrightnessPreference.h"
 #include <math.h>
 
+static const NSTimeInterval TBIdleOffDelay = 55.0;
+
 @implementation TBController {
     id<TBHardware> _hardware;
     NSTimeInterval _lastOffRequest;
@@ -15,6 +17,8 @@
     NSMutableArray<NSNumber *> *_brightnessAttemptTimes;
     double _hardwareMinimumNits;
     double _hardwareMaximumNits;
+    NSTimeInterval _idleOffStartedAt;
+    BOOL _waitingForSession;
 }
 
 - (instancetype)initWithHardware:(id<TBHardware>)hardware {
@@ -63,6 +67,7 @@
 
 - (void)failWithMessage:(NSString *)message {
     _holdingOff = NO;
+    _idleOff = NO;
     _awaitingOn = NO;
     _guardingBrightness = NO;
     _brightnessVerified = NO;
@@ -74,6 +79,8 @@
 - (void)resetAttempt {
     _failed = NO;
     _awaitingOn = NO;
+    _idleOff = NO;
+    _waitingForSession = NO;
     _unverifiedOffRequests = 0;
     _unknownSince = -1;
     _lastOffRequest = -INFINITY;
@@ -124,6 +131,12 @@
     }
     // An already-on strip must not be power-cycled during a handoff or retry.
     _observedState = [_hardware readPowerState];
+    _guardingBrightness = YES;
+    NSTimeInterval idle = [_hardware inputIdleSeconds];
+    if (![_hardware sessionAllowsControl] || !isfinite(idle) || idle < 0 || idle >= TBIdleOffDelay) {
+        [self pollAtTime:now];
+        return;
+    }
     if (requestPower && _observedState != TBPowerStateOn && ![_hardware requestOn]) {
         [self failWithMessage:@"The on request was rejected. Off control is stopped. Try again after the Mac is awake."];
         return;
@@ -141,6 +154,53 @@
     TBPowerState previousState = _observedState;
     _observedState = [_hardware readPowerState];
     if (_failed) return;
+
+    if (!_requestedOff && _guardingBrightness) {
+        if (![_hardware sessionAllowsControl]) {
+            _waitingForSession = YES;
+            _brightnessVerified = NO;
+            _message = @"Waiting for an unlocked session and an awake display.";
+            return;
+        }
+        if (_waitingForSession) {
+            // A lock/sleep transition can reset idle telemetry. Require activity after it.
+            if (_idleOff) _idleOffStartedAt = now;
+            if (_awaitingOn) _onDeadline = now + 2.0;
+            _lastBrightnessPoll = -INFINITY;
+            _brightnessUnknownSince = -1;
+            _waitingForSession = NO;
+        }
+        NSTimeInterval idle = [_hardware inputIdleSeconds];
+        BOOL validIdle = isfinite(idle) && idle >= 0;
+        if ((!validIdle || idle >= TBIdleOffDelay) && !_idleOff) [self beginIdleOffAtTime:now];
+        if (_idleOff) {
+            // A falling idle clock alone is insufficient across sleep/lock. Input must
+            // postdate the start of this hold, with margin for independent clock reads.
+            BOOL newActivity = validIdle && idle < TBIdleOffDelay && idle + 0.25 < now - _idleOffStartedAt;
+            if (newActivity && _observedState != TBPowerStateUnknown) {
+                _holdingOff = NO;
+                _idleOff = NO;
+                _unknownSince = -1;
+                _lastBrightnessPoll = -INFINITY;
+                _brightnessUnknownSince = -1;
+                if (_observedState == TBPowerStateOff) {
+                    if (![_hardware requestOn]) {
+                        [self failWithMessage:@"Could not wake the Touch Bar. Choose On to retry, or Keep off."];
+                        return;
+                    }
+                    _awaitingOn = YES;
+                    _onDeadline = now + 2.0;
+                    _message = @"Activity detected. Restoring your brightness.";
+                }
+            } else {
+                [self enforceOffAtTime:now];
+                if (!_failed && _observedState == TBPowerStateOff)
+                    _message = validIdle ? @"Off while idle. Keyboard or trackpad activity restores it."
+                                         : @"Activity readings unavailable. Keeping off until new input is detected.";
+                return;
+            }
+        }
+    }
 
     if (!_holdingOff) {
         if (_awaitingOn && _observedState == TBPowerStateOn) _awaitingOn = NO;
@@ -166,6 +226,22 @@
         return;
     }
 
+    [self enforceOffAtTime:now];
+}
+
+- (void)beginIdleOffAtTime:(NSTimeInterval)now {
+    _idleOff = YES;
+    _holdingOff = YES;
+    _awaitingOn = NO;
+    _brightnessVerified = NO;
+    _idleOffStartedAt = now;
+    _lastOffRequest = -INFINITY;
+    _unverifiedOffRequests = 0;
+    _unknownSince = -1;
+    NSLog(@"Touch Bar idle protection: requesting immediate off.");
+}
+
+- (void)enforceOffAtTime:(NSTimeInterval)now {
     if (_observedState == TBPowerStateOff) {
         _unverifiedOffRequests = 0;
         _unknownSince = -1;
@@ -218,15 +294,17 @@
         return;
     }
     if (state.dimmingStep != 0) {
-        _brightnessVerified = NO;
-        _message = @"Inactivity dimming is active. Set keyboard-backlight inactivity to Never, or choose Keep off.";
-        return; // Never fight the user's inactivity or sleep policy.
+        // A shorter keyboard timer or delayed polling can beat the 55-second guard.
+        // Skip the remaining dim phase instead of fighting its brightness multiplier.
+        [self beginIdleOffAtTime:now];
+        [self enforceOffAtTime:now];
+        return;
     }
     double target = self.targetBrightnessNits;
     BOOL nearTarget = fabs(state.physicalNits - target) <= 5.0 && fabs(state.driverNits - round(target)) <= 5.0;
     if (state.normalConfiguration && nearTarget) {
         _brightnessVerified = YES;
-        _message = @"Brighter setting verified. Keep keyboard-backlight inactivity set to Never.";
+        _message = @"Brightness verified. Turns off after 55 seconds idle and returns on activity.";
         return;
     }
     _brightnessVerified = NO;
@@ -254,6 +332,7 @@
 - (void)prepareForSleep {
     _sleeping = YES;
     _brightnessVerified = NO;
+    _waitingForSession = YES;
     if (!_failed) _message = @"Mac is sleeping. Control resumes on wake.";
 }
 
@@ -271,6 +350,7 @@
 
 - (void)stop {
     _holdingOff = NO;
+    _idleOff = NO;
     _awaitingOn = NO;
     _guardingBrightness = NO;
     _brightnessVerified = NO;

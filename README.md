@@ -2,7 +2,7 @@
 
 A small native macOS app for turning the Touch Bar off and choosing a fixed brightness. It includes a menu bar control and a slider with six steps, from 50% to 100%.
 
-**Experimental:** testing covers one M1 MacBook Pro. A read-only trace confirmed a low-brightness idle phase after about 60 seconds, followed by a reported power-off state around 76 seconds. A user reported flashing during that interval. The keyboard-backlight timer was set to Never. Read the [known issues](docs/known-issues.md) before using On mode.
+**Experimental:** testing covers one M1 MacBook Pro. Version 1.3 adds automatic Off after 55 seconds of inactivity to skip the macOS dimming interval associated with flashing. A live test confirmed the early-dimming fallback and brightness recovery; the observer reported that the cycle worked. The proactive cutoff and longer-term behavior still need validation. Read the [known issues](docs/known-issues.md) before using On mode.
 
 ## Compatibility
 
@@ -40,7 +40,8 @@ Preview uses simulated hardware and an in-memory brightness preference.
 ## Use the controls
 
 - **Keep Touch Bar off** requests an immediate off transition and watches for macOS turning the strip on again.
-- **Turn Touch Bar on** enables the strip, applies the selected brightness, and checks its readings. It leaves your Touch Bar buttons and layout intact.
+- **Turn Touch Bar on** enables the strip, applies the selected brightness, and checks its readings. After 55 seconds without input, it switches the strip off. New keyboard or trackpad activity restores On and your brightness. It leaves your Touch Bar buttons and layout intact.
+- **Off while idle** differs from manual **Keep off**. Activity wakes the idle state; manual Off stays off until you select On.
 - **Brightness** snaps to 50%, 60%, 70%, 80%, 90%, or 100%. Release the slider to apply a choice. Changing it while off saves the choice for later without lighting the strip.
 - **Requested** shows your chosen mode. **Observed** shows the driver's reported state. **Verified** means the software readings match the selected target.
 
@@ -54,7 +55,9 @@ On mode disables automatic brightness for the Touch Bar, sets its minimum policy
 
 The code contains a **fixed lower limit of 184.5 nits**, based on the working level observed on the test Mac. This is not a proven threshold for other panels. The upper limit comes from the Touch Bar driver. On the test Mac, the six steps span about 184.5 to 357.1 nits.
 
-The app leaves keyboard-backlight inactivity settings alone. Setting that timer to **Never** helped an earlier trial, but a separate Touch Bar idle-dimming sequence remains. The selected brightness stays saved while macOS reduces the reported output during idle. Version 1.2 leaves that dimming sequence in control. See [idle dimming and flashing](docs/known-issues.md#idle-dimming-and-flashing).
+The app leaves keyboard-backlight inactivity settings alone. Setting that timer to **Never** avoids a shorter keyboard dim timer but does not disable the Touch Bar's separate 60-second timer. Version 1.3 requests immediate Off at 55 seconds. If dimming starts sooner or the timer runs late, it requests immediate Off on detecting that dimming. See [idle dimming and flashing](docs/known-issues.md#idle-dimming-and-flashing).
+
+Automatic wake requires an unlocked local session, an awake built-in display, and new input after the idle hold. Missing activity readings keep the strip off. The app reads elapsed input-idle time without recording keys, pointer positions, or input events. It does not request Input Monitoring or prevent system sleep.
 
 ## Command-line access
 
@@ -64,8 +67,9 @@ Run these options on the executable inside the app bundle:
 | --- | --- |
 | `--status` | Read the Touch Bar power state; no control commands |
 | `--brightness-status` | Read brightness, policy, and driver limits; no setters |
+| `--activity-status` | Read elapsed input-idle time and session eligibility; no input events or setters |
 | `--preview` | Open the interface with simulated hardware |
-| `--resume-on` | Resume brightness monitoring without a power-on command; wait for macOS if the strip is off |
+| `--resume-on` | Adopt On mode without an initial power-on command; includes idle Off and activity recovery |
 | `--version`, `--help` | Print version or usage information |
 
 For example:
