@@ -23,7 +23,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Check shell syntax
-        run: bash -n build.sh test.sh scripts/package.sh
+        run: bash -n build.sh test.sh scripts/package.sh scripts/build-icon.sh
       - name: Run hardware-free tests
         run: ./test.sh
       - name: Build and verify app signature

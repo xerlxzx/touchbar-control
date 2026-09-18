@@ -18,6 +18,7 @@ xcrun clang -fobjc-arc -Wall -Wextra -Werror -mmacosx-version-min=12.0 \
     "$project_dir/Sources/TBBrightnessPreference.m" \
     -o "$app_dir/Contents/MacOS/Touch Bar Control"
 cp "$project_dir/Info.plist" "$app_dir/Contents/Info.plist"
+"$project_dir/scripts/build-icon.sh" "$app_dir/Contents/Resources/AppIcon.icns"
 /usr/bin/plutil -lint "$app_dir/Contents/Info.plist"
 /usr/bin/codesign --force --sign - --timestamp=none "$app_dir"
 /usr/bin/codesign --verify --strict "$app_dir"
