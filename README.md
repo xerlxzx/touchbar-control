@@ -2,7 +2,7 @@
 
 A small native macOS app for turning the Touch Bar off and choosing a fixed brightness. It includes a menu bar control and a slider with six steps, from 50% to 100%.
 
-**Experimental:** testing covers one M1 MacBook Pro. Version 1.3 adds automatic Off after 55 seconds of inactivity to skip the macOS dimming interval associated with flashing. Live validation of this change is pending. Read the [known issues](docs/known-issues.md) before using On mode.
+**Experimental:** testing covers one M1 MacBook Pro. Version 1.3 adds automatic Off after 55 seconds of inactivity to skip the macOS dimming interval associated with flashing. A live test confirmed the early-dimming fallback and brightness recovery; the observer reported that the cycle worked. The proactive cutoff and longer-term behavior still need validation. Read the [known issues](docs/known-issues.md) before using On mode.
 
 ## Compatibility
 
