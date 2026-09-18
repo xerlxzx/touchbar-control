@@ -4,7 +4,7 @@ Keep your MacBook's Touch Bar off, or turn it on at a brightness you choose.
 
 ## Download and install
 
-**[Download Touch Bar Control v1.3.0](https://github.com/xerlxzx/touchbar-control/releases/download/v1.3.0/Touch-Bar-Control-1.3.0-arm64.zip)** · [Release notes](https://github.com/xerlxzx/touchbar-control/releases/tag/v1.3.0)
+**[Download Touch Bar Control v1.3.1](https://github.com/xerlxzx/touchbar-control/releases/download/v1.3.1/Touch-Bar-Control-1.3.1-arm64.zip)** · [Release notes](https://github.com/xerlxzx/touchbar-control/releases/tag/v1.3.1)
 
 Install the app through Finder:
 
@@ -17,7 +17,7 @@ Install the app through Finder:
 
 **The Touch Bar turns off when the app opens.** Choose **Turn Touch Bar on** in the app if you want it back on.
 
-Use this **experimental release on an Apple Silicon Mac**. The developer tested it on one **13-inch M1 MacBook Pro with a Touch Bar**, running macOS 26.6.2. You can adjust brightness on that model. The download won't run on Intel Macs.
+Use this **experimental release on an Apple Silicon Mac**. Hardware testing covers one **13-inch M1 MacBook Pro with a Touch Bar**, running macOS 26.6.2. You can adjust brightness on that model. The download won't run on Intel Macs.
 
 ## Everyday use
 
@@ -37,7 +37,7 @@ While On, the Touch Bar switches off after 55 seconds without input and comes ba
 - [Report a problem](https://github.com/xerlxzx/touchbar-control/issues)
 - [Technical details and command-line options](docs/technical-reference.md)
 - [Contributing and running tests](CONTRIBUTING.md)
-- [Engineering structure and next steps](docs/engineering.md)
+- [Architecture, build, and testing](docs/engineering.md)
 - [What's changed](CHANGELOG.md)
 
 ## License

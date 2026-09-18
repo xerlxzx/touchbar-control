@@ -1,37 +1,52 @@
-# Engineering structure
+# Engineering
+
+Touch Bar Control is an Objective-C macOS application built with Clang and Apple's system frameworks. It has no third-party dependencies.
 
 ## Source layout
 
-Keep `Sources/` and `Tests/` for this small Objective-C app. You can build it with Apple’s Command Line Tools; it has no third-party dependencies.
-
-| Area | Home | Responsibility |
+| Component | File | Responsibility |
 | --- | --- | --- |
-| App and interface | `Sources/main.m` | Window, menu bar, lifecycle, CLI, and preview hardware |
-| Behavior | `Sources/TBController.*` | Requested state, retries, idle protection, and recovery |
-| Hardware boundary | `Sources/TBHardware.*` | Private APIs, eligibility checks, and device readings |
-| Values and preferences | `Sources/TBBrightness*.{h,m}` | Brightness readings, mapping, and persistence |
-| Automated checks | `Tests/`, `.github/workflows/ci.yml` | Fake-hardware tests, compilation, signature checks, and CLI smoke checks |
-| Packaging | `scripts/package.sh` | Versioned ZIP and checksum for the build Mac's architecture |
-| User documentation | `README.md`, `docs/known-issues.md` | Installation, everyday use, and the wake-flash issue |
-| Maintainer documentation | `CONTRIBUTING.md`, `docs/technical-reference.md` | Development and advanced controls |
+| Application | `Sources/main.m` | App lifecycle, window, menu bar, CLI dispatch, and preview hardware |
+| Controller | `Sources/TBController.*` | Requested mode, observed state, idle transitions, brightness verification, and retries |
+| Hardware adapter | `Sources/TBHardware.*` | Private API calls, display and session checks, and driver readings |
+| Brightness preferences | `Sources/TBBrightnessPreference.*` | Slider snapping, nits mapping, and preference storage |
+| Brightness readings | `Sources/TBBrightnessState.*` | Shared values from the hardware adapter |
+| Controller tests | `Tests/controller_tests.m` | Fake hardware, isolated preferences, and state-transition assertions |
 
-Use the controller’s `TBHardware` protocol to test behavior with fake hardware. Run physical Touch Bar checks on a supported Mac; the CI runner has no Touch Bar.
+## Control flow
 
-## Next changes, in priority order
+The app delegate sends control actions and monotonic timestamps to `TBController`. The controller reads and writes hardware through the `TBHardware` protocol. `TBRealHardware` implements that protocol for the physical device; preview and tests use simulated implementations.
 
-1. **Add Developer ID signing and notarization.** Users can download the [v1.3.0 ZIP](https://github.com/xerlxzx/touchbar-control/releases/tag/v1.3.0). Sign and notarize future builds to remove the extra developer-verification step at first launch. See [Apple's guidance](https://support.apple.com/en-au/102445).
-2. **Require CI before merging.** Configure a `main` branch ruleset requiring pull requests and the **Build and controller tests** check. Use `./build.sh` and `./test.sh` both on your Mac and in CI. The repository includes the workflow; configure the ruleset in GitHub settings.
-3. **Record hardware checks for each release.** Test manual Off, each brightness step, idle cutoff, early dimming, recovery, lock/unlock, and sleep/wake. Record the app version, Mac model, macOS version, and a pass/fail/not-tested result for each check. Test another model before claiming support for it.
-4. **Split `main.m` as you work on it.** Extract the app delegate/UI, CLI handling, and preview hardware into separate files. Keep the entry point in `main.m` and preserve behavior. Add CLI tests during that extraction.
-5. **Centralize the version.** Read the CLI version from bundle metadata. Until then, update `Info.plist` and the CLI version together.
+The controller tracks requested mode apart from observed power state. Manual Off stays active until an explicit On request. In On mode, 55 seconds of inactivity starts an idle Off hold; new input restores On when session and display checks permit it. A nonzero dimming step can trigger Off before the idle threshold.
 
-## Release checklist
+Sleep notifications suspend controller actions. Recovery requires an eligible session and, after an idle hold spanning a lock or sleep transition, input after the session becomes eligible. Rejected commands and sustained missing readings stop control attempts.
 
-- Update the app version/build in `Info.plist`, CLI version, and `CHANGELOG.md`.
-- Pass CI and record the hardware checks above, including anything untested.
-- Run `./scripts/package.sh` from the release commit. Check the ZIP and SHA-256 checksum under `work/releases/`. The script runs tests and verifies the local app signature before packaging.
-- Test the extracted app on a separate Mac of the advertised architecture. For a release without Developer ID signing, document any Gatekeeper prompts. Add signing and notarization to the packaging script before using it for notarized releases.
-- Tag the release and publish the ZIP and checksum with supported systems and concise release notes. Verify the GitHub acting account is `xerlxzx` before publishing.
-- Test installation from the download and update the README with the release link.
+## Control invariants
 
-Use GitHub issues for actionable work, PRs for reviewed changes, and the changelog for completed behavior changes.
+- A brightness selection while Off updates the target without powering on the strip.
+- Power-on requests follow the removal of Off enforcement.
+- Brightness writes require valid driver limits and an eligible session.
+- Off enforcement allows three unverified requests. Brightness recovery allows three requests within 60 seconds, with at least one second between writes.
+- Quit stops monitoring without sending a power-on command or resetting the brightness policy.
+
+The app stores the selected percentage through `TBPreferenceStore`, using `NSUserDefaults` in normal operation and isolated memory in preview and tests. The percentage snaps to six steps from 50% to 100%. See the [technical reference](technical-reference.md) for brightness mapping and platform constraints.
+
+## Build and packaging
+
+`build.sh` compiles for the host architecture with ARC, `-Wall -Wextra -Werror`, and a macOS 12 deployment target. It links Cocoa, IOKit, and CoreGraphics, copies `Info.plist` into the app bundle, then applies and verifies an ad-hoc signature.
+
+`Resources/AppIcon.png` is the source artwork. During the build, `scripts/build-icon.sh` uses `sips` and `iconutil` to generate standard and Retina icon sizes from 16 to 1024 pixels. The bundle contains `Contents/Resources/AppIcon.icns`, referenced by `CFBundleIconFile`, before code signing.
+
+`scripts/package.sh` runs the tests and builds into a temporary staging directory. It writes a versioned ZIP and SHA-256 checksum to `work/releases/`, then removes the staging directory. The archive name includes the bundle version and binary architecture.
+
+`Info.plist` contains the application version (`CFBundleShortVersionString`) and build number (`CFBundleVersion`). The CLI version string in `Sources/main.m` matches the application version.
+
+## Test coverage
+
+`test.sh` compiles the controller, brightness values, preferences, and fake hardware against Foundation. It excludes `TBHardware.m` and IOKit, so the tests cannot issue device commands.
+
+The assertions cover power transitions, bounded retries, brightness mapping, saved choices, idle Off, input recovery, lock/sleep gating, and missing readings. The macOS CI workflow runs these tests, checks shell syntax, builds the app, verifies its signature, and checks the CLI help/version paths.
+
+Physical Touch Bar behavior falls outside automated coverage. Hardware reports distinguish command acceptance, driver readings, and visible panel behavior, and identify the app version, Mac model, and macOS version.
+
+Build commands and contribution requirements are in [CONTRIBUTING.md](../CONTRIBUTING.md).

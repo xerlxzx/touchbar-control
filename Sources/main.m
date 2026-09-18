@@ -443,7 +443,7 @@ int main(int argc, const char *argv[]) {
             return state == TBPowerStateUnknown ? 3 : 0;
         }
         if (argc == 2 && strcmp(argv[1], "--version") == 0) {
-            puts("Touch Bar Control 1.3.0");
+            puts("Touch Bar Control 1.3.1");
             return 0;
         }
         if (argc == 2 && strcmp(argv[1], "--help") == 0) {

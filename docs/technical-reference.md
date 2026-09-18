@@ -17,7 +17,7 @@ The app uses Apple's private `DFRBrightness` and `CoreBrightness` frameworks. ma
 
 On mode disables automatic brightness for the Touch Bar, sets its minimum policy to `0.25`, and requests the selected level in nits. The main display retains its settings.
 
-The developer set the **lower limit to 184.5 nits** after testing that level on one Mac. Test other panels before using that limit as a flicker-free threshold. The Touch Bar driver supplies the upper limit. On the test Mac, the six steps span about 184.5 to 357.1 nits.
+Brightness mapping uses a **fixed lower limit of 184.5 nits** and the upper limit from the Touch Bar driver. Hardware validation of that lower limit covers one Mac. On that machine, the six steps span about 184.5 to 357.1 nits.
 
 The app leaves keyboard-backlight inactivity settings alone. Setting that timer to **Never** avoids a shorter keyboard dim timer but does not disable the Touch Bar's separate 60-second timer. Version 1.3 requests immediate Off at 55 seconds. If dimming starts sooner or the timer runs late, it requests immediate Off on detecting that dimming.
 
@@ -46,7 +46,7 @@ Quit the current instance before using preview or resume mode. Use `--resume-on`
 
 ### Return to the fixed baseline policy
 
-Use `--restore-original-policy` to **set minimum brightness to 0 and enable automatic brightness**. The developer used those values on the test Mac. You cannot recover your previous settings with this command; the app keeps no backup of them.
+`--restore-original-policy` **sets minimum brightness to 0 and enables automatic brightness**. These are fixed values. The app keeps no backup of the prior policy, so this command cannot restore per-device settings from before installation.
 
 Quit the app before running this command. Lower brightness may bring flashing back.
 

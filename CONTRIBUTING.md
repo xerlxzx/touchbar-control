@@ -36,7 +36,7 @@ CI runs the tests, builds the app, verifies its local signature, and checks the 
 ./scripts/package.sh
 ```
 
-Find the versioned ZIP and SHA-256 checksum in `work/releases/` after the tests and build finish. The ZIP contains an app for your Mac’s architecture with a local ad-hoc signature. Handle notarization and publication as separate steps. Follow the [release checklist](docs/engineering.md#release-checklist) before publishing.
+The command writes a versioned ZIP and SHA-256 checksum to `work/releases/` after the tests and build finish. The ZIP contains an app for the build Mac's architecture with an ad-hoc signature. See [build and packaging](docs/engineering.md#build-and-packaging) for implementation details.
 
 ## Changes to hardware control
 

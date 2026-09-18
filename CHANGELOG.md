@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.3.1 · 2026-09-19
+
+- Added a black-and-white Touch Bar app icon for Finder and the Dock, with standard and Retina sizes.
+- Replaced the maintainer roadmap with architecture, build, and testing documentation.
+
 ## 1.3.0 · 2026-09-18
 
 ### Distribution
