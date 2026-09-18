@@ -1,0 +1,35 @@
+name: Report a problem
+description: Tell us what happened on your Mac.
+body:
+  - type: input
+    id: app-version
+    attributes:
+      label: App version
+      placeholder: For example, 1.3.0. Write "unknown" if you're unsure.
+    validations:
+      required: true
+  - type: input
+    id: mac
+    attributes:
+      label: Mac model and macOS version
+      description: Find these in Apple menu → About This Mac. Don't include your serial number.
+      placeholder: For example, MacBook Pro 13-inch M1, macOS 26.6.2.
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead? For installation problems, paste the error here.
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Settings and timing (optional)
+      description: If relevant, include On/Off, brightness, whether you were typing or idle, and whether this followed wake or unlock.
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Screenshots or short status readings (optional)
+      description: Remove personal details before posting. A full system log isn't needed.

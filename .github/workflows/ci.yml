@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Build and controller tests
+    runs-on: macos-15
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Check shell syntax
+        run: bash -n build.sh test.sh scripts/package.sh
+      - name: Run hardware-free tests
+        run: ./test.sh
+      - name: Build and verify app signature
+        run: ./build.sh 'work/ci/Touch Bar Control.app'
+      - name: Check CLI entry points without accessing hardware
+        run: |
+          'work/ci/Touch Bar Control.app/Contents/MacOS/Touch Bar Control' --version
+          'work/ci/Touch Bar Control.app/Contents/MacOS/Touch Bar Control' --help

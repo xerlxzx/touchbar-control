@@ -1,10 +1,17 @@
 # Contributing
 
-Start with the [known issues](docs/known-issues.md), especially the unresolved idle-flashing report and the limits of testing on one Mac.
+Start with the [engineering structure](docs/engineering.md) and [technical reference](docs/technical-reference.md).
 
 ## Build and test
 
-Use macOS with Apple's Command Line Tools:
+Use macOS with [Apple's Command Line Tools](https://developer.apple.com/documentation/xcode/installing-the-command-line-tools/) (`xcode-select --install`). Clone the repository first:
+
+```sh
+git clone https://github.com/xerlxzx/touchbar-control.git
+cd touchbar-control
+```
+
+Build into a separate output folder so you don't replace a running copy:
 
 ```sh
 ./build.sh 'work/staged/Touch Bar Control.app'
@@ -21,16 +28,15 @@ Quit other app instances before opening a preview:
 
 Preview keeps its choice in memory and leaves the user's saved preference alone. Keep preview results separate from tests on a physical Touch Bar. Check Off and On, then close and reopen the window. Check the slider with the pointer and keyboard.
 
-## Source layout
+CI runs the tests, builds the app, verifies its local signature, and checks the CLI help/version entry points on pull requests and pushes to `main`. It does not launch hardware control.
 
-| File | Responsibility |
-| --- | --- |
-| `Sources/main.m` | Native window, menu bar, command-line options, and sleep notifications |
-| `Sources/TBHardware.m` | Private API access, display checks, and driver readings |
-| `Sources/TBController.m` | Off enforcement, brightness verification, and retry limits |
-| `Sources/TBBrightnessPreference.m` | Slider snapping, range mapping, and saved percentage |
-| `Sources/TBBrightnessState.m` | Brightness readings shared by hardware and controller code |
-| `Tests/controller_tests.m` | Tests using fake hardware and preferences |
+## Package a release
+
+```sh
+./scripts/package.sh
+```
+
+Find the versioned ZIP and SHA-256 checksum in `work/releases/` after the tests and build finish. The ZIP contains an app for your Mac’s architecture with a local ad-hoc signature. Handle notarization and publication as separate steps. Follow the [release checklist](docs/engineering.md#release-checklist) before publishing.
 
 ## Changes to hardware control
 
@@ -42,12 +48,12 @@ Changes to the lower brightness limit, supported models, dimming behavior, or pr
 
 [Open an issue](https://github.com/xerlxzx/touchbar-control/issues) with the app version, macOS version, and model identifier, such as `MacBookPro17,1`. Describe the chosen mode and brightness, whether the strip was active or idle, and how long the symptom lasted. For idle reports, include the keyboard-backlight inactivity setting and time since the last keyboard input.
 
-These commands read state without sending control commands:
+For a copy installed in Applications, read its state with these commands:
 
 ```sh
-"./Touch Bar Control.app/Contents/MacOS/Touch Bar Control" --status
-"./Touch Bar Control.app/Contents/MacOS/Touch Bar Control" --brightness-status
-"./Touch Bar Control.app/Contents/MacOS/Touch Bar Control" --activity-status
+"/Applications/Touch Bar Control.app/Contents/MacOS/Touch Bar Control" --status
+"/Applications/Touch Bar Control.app/Contents/MacOS/Touch Bar Control" --brightness-status
+"/Applications/Touch Bar Control.app/Contents/MacOS/Touch Bar Control" --activity-status
 ```
 
 Review output and screenshots before posting. Remove serial numbers, account details, and private paths. Short readings around the event help more than a full system dump.
