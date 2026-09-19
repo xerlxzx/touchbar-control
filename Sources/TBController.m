@@ -159,13 +159,27 @@ static const NSTimeInterval TBIdleOffDelay = 55.0;
         if (_screensaverActive || ![_hardware sessionAllowsControl]) {
             _waitingForSession = YES;
             _brightnessVerified = NO;
-            // An inactive session forbids waking/brightening, but must not abandon
-            // Off enforcement when macOS locks before the idle deadline.
-            if (!_idleOff) [self beginIdleOffAtTime:now];
-            [self enforceOffAtTime:now];
-            if (!_failed) _message = _screensaverActive
-                ? @"Keeping off while the screen saver is active."
-                : @"Keeping off until the session and display are active again.";
+            // Keep the normal inactivity deadline during a saver/lock. Only wake
+            // and brightness writes are blocked; idle and early-dim protection run.
+            NSTimeInterval idle = [_hardware inputIdleSeconds];
+            if (!_idleOff && (!isfinite(idle) || idle < 0 || idle >= TBIdleOffDelay))
+                [self beginIdleOffAtTime:now];
+            if (!_idleOff && _observedState == TBPowerStateOn && now - _lastBrightnessPoll >= 0.5) {
+                _lastBrightnessPoll = now;
+                _brightnessState = [_hardware readBrightnessState];
+                if (_brightnessState && _brightnessState.dimmingStep > 0)
+                    [self beginIdleOffAtTime:now];
+            }
+            if (_idleOff) {
+                [self enforceOffAtTime:now];
+                if (!_failed) _message = _screensaverActive
+                    ? @"Off after inactivity. Waiting for the screen saver to end and new input."
+                    : @"Off after inactivity. Waiting for an active session and new input.";
+            } else {
+                _message = _screensaverActive
+                    ? @"Screen saver active. Turns off after 55 seconds without input."
+                    : @"Session inactive. The 55-second idle protection is still running.";
+            }
             return;
         }
         if (_waitingForSession) {

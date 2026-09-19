@@ -140,12 +140,18 @@ int main(void) {
         [delegate.timer fire];
         CHECK(delegate.controller.idleOff && hardware.state == TBPowerStateOff);
 
-        // Screensaver events enter the hold immediately, even with no lock or idle.
+        // Screensaver events preserve the idle deadline; the timer enforces Off at 55.
         hardware.idle = 0;
         [delegate.controller turnOnAtTime:NSProcessInfo.processInfo.systemUptime];
         [delegate screensaverChanged:[NSNotification notificationWithName:@"com.apple.screensaver.didstart" object:nil]];
-        CHECK(delegate.controller.screensaverActive && delegate.controller.idleOff);
-        CHECK(hardware.state == TBPowerStateOff);
+        CHECK(delegate.controller.screensaverActive && !delegate.controller.idleOff);
+        CHECK(hardware.state == TBPowerStateOn);
+        hardware.idle = 54.99;
+        [delegate.timer fire];
+        CHECK(!delegate.controller.idleOff && hardware.state == TBPowerStateOn);
+        hardware.idle = 55;
+        [delegate.timer fire];
+        CHECK(delegate.controller.idleOff && hardware.state == TBPowerStateOff);
         [delegate screensaverChanged:[NSNotification notificationWithName:@"com.apple.screensaver.didstop" object:nil]];
         CHECK(!delegate.controller.screensaverActive && delegate.controller.idleOff);
         CHECK(hardware.state == TBPowerStateOff); // Stopping the saver alone does not authorize On.

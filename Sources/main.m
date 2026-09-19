@@ -420,7 +420,7 @@ static NSTextField *TBLabel(NSString *text, NSFont *font) {
             self.loginItemMessage.stringValue = @"Permission is needed in System Settings → General → Login Items.";
             break;
         case TBLoginItemNotFound:
-            self.loginItemMessage.stringValue = @"Login item unavailable. Move the app to Applications, reopen it, and try again.";
+            self.loginItemMessage.stringValue = @"Enable this option to register the app for launch at login.";
             break;
         case TBLoginItemUnavailable:
             self.loginItemMessage.stringValue = @"This option requires macOS 13 or later.";
@@ -545,7 +545,7 @@ int main(int argc, const char *argv[]) {
             return state == TBPowerStateUnknown ? 3 : 0;
         }
         if (argc == 2 && strcmp(argv[1], "--version") == 0) {
-            puts("Touch Bar Control 1.3.2");
+            puts("Touch Bar Control 1.3.3");
             return 0;
         }
         if (argc == 2 && strcmp(argv[1], "--help") == 0) {

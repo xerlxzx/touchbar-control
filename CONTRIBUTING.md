@@ -28,7 +28,7 @@ Quit other app instances before opening a preview:
 
 Preview keeps its choices in memory and leaves the user's brightness preference and login items alone. Keep preview results separate from tests on a physical Touch Bar. Check Off and On, close and reopen the window, and toggle Launch at login. Check the slider with the pointer and keyboard.
 
-For physical validation, check a screen saver both with and without locking, starting before 55 seconds and during an existing idle hold. Confirm the strip stays off, unlock alone does not wake it, and subsequent input restores brightness. Check that sleep still suspends control. Test startup separately with the installed app: enable Launch at login, log out/in, verify it opens in On mode, then disable it and verify the login item is removed.
+For physical validation, check a screen saver both with and without locking, starting before 55 seconds and during an existing idle hold. Confirm saver entry leaves an active strip on, the timeout switches it off at 55 seconds of input inactivity, and it stays off afterward. The timer measures time since the last input, not an extra 55 seconds from saver entry. Check that unlock alone does not wake an idle-held strip, and subsequent input restores brightness. Also test the existing fallback if macOS starts dimming sooner. Check that sleep still suspends control. Test startup separately with the installed app: enable Launch at login, log out/in, verify it opens in On mode, then disable it and verify the login item is removed.
 
 CI runs the tests, builds the app, verifies its local signature, and checks the CLI help/version entry points on pull requests and pushes to `main`. It does not launch hardware control.
 
