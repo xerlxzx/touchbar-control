@@ -11,15 +11,19 @@ Touch Bar Control is an Objective-C macOS application built with Clang and Apple
 | Hardware adapter | `Sources/TBHardware.*` | Private API calls, display and session checks, and driver readings |
 | Brightness preferences | `Sources/TBBrightnessPreference.*` | Slider snapping, nits mapping, and preference storage |
 | Brightness readings | `Sources/TBBrightnessState.*` | Shared values from the hardware adapter |
+| Login item | `Sources/TBLoginItem.*` | System registration/status on macOS 13+, or isolated preview state |
 | Controller tests | `Tests/controller_tests.m` | Fake hardware, isolated preferences, and state-transition assertions |
+| App tests | `Tests/app_tests.m` | Default launch, window lifecycle, screen-saver callbacks, and login-item UI state |
 
 ## Control flow
 
 The app delegate sends control actions and monotonic timestamps to `TBController`. The controller reads and writes hardware through the `TBHardware` protocol. `TBRealHardware` implements that protocol for the physical device; preview and tests use simulated implementations.
 
-The controller tracks requested mode apart from observed power state. Manual Off stays active until an explicit On request. In On mode, 55 seconds of inactivity starts an idle Off hold; new input restores On when session and display checks permit it. A nonzero dimming step can trigger Off before the idle threshold.
+The controller tracks requested mode apart from observed power state. The app activates On at launch after loading the saved brightness. Manual Off stays active until an explicit On request. In On mode, 55 seconds of inactivity starts an idle Off hold; new input restores On when session and display checks permit it. A nonzero dimming step can trigger Off before the idle threshold.
 
-Sleep notifications suspend controller actions. Recovery requires an eligible session and, after an idle hold spanning a lock or sleep transition, input after the session becomes eligible. Rejected commands and sustained missing readings stop control attempts.
+The delegate observes `com.apple.screensaver.didstart` and `com.apple.screensaver.didstop` through the distributed notification center, with immediate delivery while suspended. These are undocumented notifications also used by [Hammerspoon's screen-state watcher](https://github.com/Hammerspoon/hammerspoon/blob/master/extensions/caffeinate/libcaffeinate_watcher.m). Saver start or a failed session-eligibility check enters an Off hold without waiting for the idle deadline. Both block On and brightness writes but continue bounded Off enforcement. Saver stop does not bypass a remaining lock or authorize a wake without new input.
+
+Sleep notifications suspend controller actions. Recovery requires an eligible session and, after an idle hold spanning a screen saver, lock, or sleep transition, input after the session becomes eligible. Rejected commands and sustained missing readings stop control attempts.
 
 ## Control invariants
 
@@ -33,7 +37,7 @@ The app stores the selected percentage through `TBPreferenceStore`, using `NSUse
 
 ## Build and packaging
 
-`build.sh` compiles for the host architecture with ARC, `-Wall -Wextra -Werror`, and a macOS 12 deployment target. It links Cocoa, IOKit, and CoreGraphics, copies `Info.plist` into the app bundle, then applies and verifies an ad-hoc signature.
+`build.sh` compiles for the host architecture with ARC, `-Wall -Wextra -Werror`, and a macOS 12 deployment target. It links Cocoa, IOKit, CoreGraphics, and ServiceManagement, copies `Info.plist` into the app bundle, then applies and verifies an ad-hoc signature. ServiceManagement's macOS 13 login-item API is guarded by runtime availability checks.
 
 `Resources/AppIcon.png` is the source artwork. During the build, `scripts/build-icon.sh` uses `sips` and `iconutil` to generate standard and Retina icon sizes from 16 to 1024 pixels. The bundle contains `Contents/Resources/AppIcon.icns`, referenced by `CFBundleIconFile`, before code signing.
 
@@ -43,9 +47,9 @@ The app stores the selected percentage through `TBPreferenceStore`, using `NSUse
 
 ## Test coverage
 
-`test.sh` compiles the controller, brightness values, preferences, and fake hardware against Foundation. It excludes `TBHardware.m` and IOKit, so the tests cannot issue device commands.
+`test.sh` compiles the controller, brightness values, preferences, and fake hardware against Foundation. A second executable compiles the app delegate with Cocoa, simulated hardware, and preview/fake login items. Both exclude `TBHardware.m` and IOKit; real-device entry points in the app tests abort if reached. Login-item tests never register with ServiceManagement.
 
-The assertions cover power transitions, bounded retries, brightness mapping, saved choices, idle Off, input recovery, lock/sleep gating, and missing readings. The macOS CI workflow runs these tests, checks shell syntax, builds the app, verifies its signature, and checks the CLI help/version paths.
+The assertions cover power transitions, bounded retries, brightness mapping, saved choices, idle Off, input recovery, screen-saver/lock/sleep gating, and missing readings. App tests cover default On, continued enforcement after window close, Quit cleanup, and login-item success, errors, pending approval, unsupported systems, and external status changes. The macOS CI workflow runs these tests, checks shell syntax, builds the app, verifies its signature, and checks the CLI help/version paths.
 
 Physical Touch Bar behavior falls outside automated coverage. Hardware reports distinguish command acceptance, driver readings, and visible panel behavior, and identify the app version, Mac model, and macOS version.
 

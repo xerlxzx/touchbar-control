@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.3.2 · 2026-09-19
+
+- Start in On mode using the saved brightness and 55-second idle protection.
+- Keep the Touch Bar off during the screen saver and locked/inactive sessions instead of skipping Off enforcement. Require fresh input after eligibility returns.
+- Add an optional Launch at login toggle in the window and menu bar on macOS 13 or later, with actual system status, approval guidance, and error handling.
+- Clarify that closing the window keeps protection running, while Quit stops the 55-second timeout.
+- Pass 195 controller safety assertions and 33 app lifecycle/login-item assertions, with simulated hardware and login items. Native build, signature, and UI preview checks also pass. Physical screen-saver behavior and actual launch after login still need validation.
+
+Investigation of the older installed build found a screen-saver lock followed 59.9 seconds later by TouchBarServer entering its dimming stage, with no Off request logged by the app in between. The session-eligibility early return skipped both idle shutdown and the dimming fallback. This release corrects that control flow; it does not claim a hardware repair or guarantee flash-free wake transitions.
+
 ## 1.3.1 · 2026-09-19
 
 - Added a black-and-white Touch Bar app icon for Finder and the Dock, with standard and Retina sizes.

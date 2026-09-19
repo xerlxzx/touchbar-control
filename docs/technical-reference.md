@@ -21,7 +21,17 @@ Brightness mapping uses a **fixed lower limit of 184.5 nits** and the upper limi
 
 The app leaves keyboard-backlight inactivity settings alone. Setting that timer to **Never** avoids a shorter keyboard dim timer but does not disable the Touch Bar's separate 60-second timer. Version 1.3 requests immediate Off at 55 seconds. If dimming starts sooner or the timer runs late, it requests immediate Off on detecting that dimming.
 
-Automatic wake requires an unlocked local session, an awake built-in display, and new input after the idle hold. Missing activity readings keep the strip off. The app reads elapsed input-idle time without recording keys, pointer positions, or input events. It does not request Input Monitoring or prevent system sleep.
+The app starts in On mode at the saved brightness. If it starts while already idle or in an ineligible session, it holds Off until recovery is allowed. Screen-saver start notifications and locked/inactive session checks also enter an Off hold immediately. Ineligible sessions block On and brightness writes while allowing bounded Off enforcement; actual system/display sleep notifications suspend all controller activity until wake.
+
+Automatic wake requires the screen saver to have stopped, an unlocked local session, an awake built-in display, and new input after eligibility returns. A reset idle clock at unlock is not sufficient. Missing activity readings keep the strip off. The app reads elapsed input-idle time without recording keys, pointer positions, or input events. It does not request Input Monitoring or prevent system sleep.
+
+Closing the window leaves the polling timer running. Quitting ends the timer and all enforcement; the 55-second behavior is not installed as a system setting or a separate background service.
+
+## Launch at login
+
+On macOS 13 or later, the window and menu bar provide **Launch at login**, backed by Apple's [`SMAppService.mainAppService`](https://developer.apple.com/documentation/servicemanagement/smappservice). Registration is opt-in. The control reads the operating system's status on activation and menu opening, including changes made in System Settings. Pending approval appears as a mixed checkbox with a settings button; failed operations retain the actual state and show the error.
+
+The macOS 12 build remains supported at compile time, but its startup toggle is disabled. Preview simulates the toggle in memory and never queries or changes real login items. Actual launch after login must be tested using an installed, signed app; automated tests do not register a login item or log the user out.
 
 ## Command-line access
 
@@ -42,7 +52,7 @@ For example:
 "/Applications/Touch Bar Control.app/Contents/MacOS/Touch Bar Control" --brightness-status
 ```
 
-Quit the current instance before using preview or resume mode. Use `--resume-on` during a controlled app update to avoid a default-Off launch.
+Quit the current instance before using preview or resume mode. Use `--resume-on` during a controlled app update to adopt On without an initial power-on command. Ordinary launch now starts On too, and can power on an eligible, active strip.
 
 ### Return to the fixed baseline policy
 

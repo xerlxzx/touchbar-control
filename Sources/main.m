@@ -1,6 +1,8 @@
 #import <Cocoa/Cocoa.h>
 #import "TBController.h"
 #import "TBBrightnessPreference.h"
+#import "TBLoginItem.h"
+#import <ServiceManagement/ServiceManagement.h>
 #include <math.h>
 
 static NSString *const TBBundleIdentifier = @"local.touchbarcontrol";
@@ -66,7 +68,7 @@ static NSTextField *TBLabel(NSString *text, NSFont *font) {
     return label;
 }
 
-@interface TBAppDelegate : NSObject <NSApplicationDelegate, NSWindowDelegate>
+@interface TBAppDelegate : NSObject <NSApplicationDelegate, NSWindowDelegate, NSMenuDelegate>
 @property(nonatomic) BOOL preview;
 @property(nonatomic) BOOL resumeOn;
 @property(nonatomic, strong) NSWindow *window;
@@ -81,6 +83,13 @@ static NSTextField *TBLabel(NSString *text, NSFont *font) {
 @property(nonatomic, strong) TBStepSlider *brightnessSlider;
 @property(nonatomic, strong) NSTextField *brightnessLabel;
 @property(nonatomic, strong) TBBrightnessPreference *brightnessPreference;
+@property(nonatomic, strong) TBLoginItem *loginItem;
+@property(nonatomic, strong) NSButton *launchAtLoginButton;
+@property(nonatomic, strong) NSTextField *loginItemMessage;
+@property(nonatomic, strong) NSButton *loginItemSettingsButton;
+@property(nonatomic, strong) NSMenuItem *launchAtLoginMenuItem;
+@property(nonatomic, copy) NSString *loginItemError;
+@property(nonatomic) TBLoginItemStatus loginItemErrorStatus;
 @property(nonatomic, strong) NSMenuItem *statusLine;
 @property(nonatomic, strong) NSMenuItem *offMenuItem;
 @property(nonatomic, strong) NSMenuItem *onMenuItem;
@@ -107,11 +116,13 @@ static NSTextField *TBLabel(NSString *text, NSFont *font) {
     // Preview is entirely in memory and cannot read or overwrite the user's saved selection.
     id<TBPreferenceStore> store = self.preview ? nil : (id<TBPreferenceStore>)NSUserDefaults.standardUserDefaults;
     self.brightnessPreference = [[TBBrightnessPreference alloc] initWithStore:store];
+    self.loginItem = [[TBLoginItem alloc] initWithPreview:self.preview];
     [self.controller setBrightnessPercent:self.brightnessPreference.percent atTime:NSProcessInfo.processInfo.systemUptime];
     [self buildMenus];
     [self buildWindow];
+    [self refreshLoginItem];
     if (self.resumeOn) [self.controller resumeOnAtTime:NSProcessInfo.processInfo.systemUptime];
-    else [self.controller keepOffAtTime:NSProcessInfo.processInfo.systemUptime];
+    else [self.controller turnOnAtTime:NSProcessInfo.processInfo.systemUptime];
     [self refresh];
     __weak TBAppDelegate *weakSelf = self;
     self.timer = [NSTimer timerWithTimeInterval:0.1 repeats:YES block:^(NSTimer *timer) {
@@ -132,6 +143,11 @@ static NSTextField *TBLabel(NSString *text, NSFont *font) {
                           name:NSWorkspaceDidWakeNotification object:nil];
     [notifications addObserver:self selector:@selector(didWake:)
                           name:NSWorkspaceScreensDidWakeNotification object:nil];
+    NSDistributedNotificationCenter *distributed = NSDistributedNotificationCenter.defaultCenter;
+    for (NSString *name in @[@"com.apple.screensaver.didstart", @"com.apple.screensaver.didstop"]) {
+        [distributed addObserver:self selector:@selector(screensaverChanged:) name:name object:nil
+              suspensionBehavior:NSNotificationSuspensionBehaviorDeliverImmediately];
+    }
     [self showWindow:nil];
 }
 
@@ -180,6 +196,7 @@ static NSTextField *TBLabel(NSString *text, NSFont *font) {
     self.statusItem.button.accessibilityLabel = @"Touch Bar Control";
     NSMenu *statusMenu = [NSMenu new];
     statusMenu.autoenablesItems = NO;
+    statusMenu.delegate = self;
     self.statusLine = [statusMenu addItemWithTitle:@"Touch Bar: checking…" action:nil keyEquivalent:@""];
     self.statusLine.enabled = NO;
     [statusMenu addItem:NSMenuItem.separatorItem];
@@ -190,13 +207,16 @@ static NSTextField *TBLabel(NSString *text, NSFont *font) {
     self.onMenuItem = [statusMenu addItemWithTitle:@"Turn Touch Bar on" action:@selector(turnOn:) keyEquivalent:@""];
     self.onMenuItem.target = self;
     [statusMenu addItem:NSMenuItem.separatorItem];
+    self.launchAtLoginMenuItem = [statusMenu addItemWithTitle:@"Launch at login" action:@selector(toggleLaunchAtLogin:) keyEquivalent:@""];
+    self.launchAtLoginMenuItem.target = self;
+    [statusMenu addItem:NSMenuItem.separatorItem];
     quit = [statusMenu addItemWithTitle:@"Quit Touch Bar Control" action:@selector(terminate:) keyEquivalent:@"q"];
     quit.target = NSApp;
     self.statusItem.menu = statusMenu;
 }
 
 - (void)buildWindow {
-    self.window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 500, 450)
+    self.window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 500, 570)
                                             styleMask:NSWindowStyleMaskTitled | NSWindowStyleMaskClosable |
                                                       NSWindowStyleMaskMiniaturizable
                                               backing:NSBackingStoreBuffered defer:NO];
@@ -242,7 +262,7 @@ static NSTextField *TBLabel(NSString *text, NSFont *font) {
     requestedTitle.textColor = NSColor.secondaryLabelColor;
     NSTextField *observedTitle = TBLabel(@"Observed", [NSFont systemFontOfSize:13]);
     observedTitle.textColor = NSColor.secondaryLabelColor;
-    self.requestedLabel = TBLabel(@"Keep off", [NSFont systemFontOfSize:13 weight:NSFontWeightMedium]);
+    self.requestedLabel = TBLabel(@"On", [NSFont systemFontOfSize:13 weight:NSFontWeightMedium]);
     self.observedLabel = TBLabel(@"Checking…", [NSFont systemFontOfSize:13 weight:NSFontWeightMedium]);
     self.requestedLabel.accessibilityLabel = @"Requested Touch Bar state";
     self.observedLabel.accessibilityLabel = @"Observed Touch Bar power state";
@@ -301,7 +321,25 @@ static NSTextField *TBLabel(NSString *text, NSFont *font) {
     [buttons addArrangedSubview:self.onButton];
     [stack addArrangedSubview:buttons];
 
-    NSTextField *footer = TBLabel(@"Starts with the Touch Bar off. Closing this window keeps control running in the menu bar. Quitting stops control without turning it on.", [NSFont systemFontOfSize:11]);
+    NSStackView *startupGroup = [NSStackView new];
+    startupGroup.orientation = NSUserInterfaceLayoutOrientationVertical;
+    startupGroup.alignment = NSLayoutAttributeLeading;
+    startupGroup.spacing = 6;
+    [stack addArrangedSubview:startupGroup];
+    [startupGroup.widthAnchor constraintEqualToAnchor:stack.widthAnchor].active = YES;
+    self.launchAtLoginButton = [NSButton checkboxWithTitle:@"Launch at login" target:self action:@selector(toggleLaunchAtLogin:)];
+    self.launchAtLoginButton.allowsMixedState = YES;
+    self.launchAtLoginButton.toolTip = @"Open Touch Bar Control automatically when you log in to this Mac.";
+    [startupGroup addArrangedSubview:self.launchAtLoginButton];
+    self.loginItemMessage = TBLabel(@"", [NSFont systemFontOfSize:11]);
+    self.loginItemMessage.textColor = NSColor.secondaryLabelColor;
+    [startupGroup addArrangedSubview:self.loginItemMessage];
+    [self.loginItemMessage.widthAnchor constraintEqualToAnchor:startupGroup.widthAnchor].active = YES;
+    self.loginItemSettingsButton = [NSButton buttonWithTitle:@"Login Items Settings…" target:self action:@selector(openLoginItemSettings:)];
+    self.loginItemSettingsButton.bezelStyle = NSBezelStyleRounded;
+    [startupGroup addArrangedSubview:self.loginItemSettingsButton];
+
+    NSTextField *footer = TBLabel(@"Starts On. Closing this window keeps protection running in the menu bar. Quitting stops protection, including the 55-second timeout.", [NSFont systemFontOfSize:11]);
     footer.textColor = NSColor.secondaryLabelColor;
     [stack addArrangedSubview:footer];
     [footer.widthAnchor constraintEqualToAnchor:stack.widthAnchor].active = YES;
@@ -364,6 +402,63 @@ static NSTextField *TBLabel(NSString *text, NSFont *font) {
     [self.controller keepOffAtTime:NSProcessInfo.processInfo.systemUptime];
     [self refresh];
 }
+- (void)refreshLoginItem {
+    TBLoginItemStatus status = self.loginItem.status;
+    NSControlStateValue state = status == TBLoginItemEnabled ? NSControlStateValueOn
+        : status == TBLoginItemRequiresApproval ? NSControlStateValueMixed : NSControlStateValueOff;
+    self.launchAtLoginButton.state = state;
+    self.launchAtLoginMenuItem.state = state;
+    self.launchAtLoginButton.enabled = status != TBLoginItemUnavailable;
+    self.launchAtLoginMenuItem.enabled = self.launchAtLoginButton.enabled;
+    self.loginItemSettingsButton.hidden = status != TBLoginItemRequiresApproval || self.preview;
+    self.loginItemMessage.textColor = NSColor.secondaryLabelColor;
+    switch (status) {
+        case TBLoginItemEnabled:
+            self.loginItemMessage.stringValue = @"Opens automatically when you log in to this Mac.";
+            break;
+        case TBLoginItemRequiresApproval:
+            self.loginItemMessage.stringValue = @"Permission is needed in System Settings → General → Login Items.";
+            break;
+        case TBLoginItemNotFound:
+            self.loginItemMessage.stringValue = @"Login item unavailable. Move the app to Applications, reopen it, and try again.";
+            break;
+        case TBLoginItemUnavailable:
+            self.loginItemMessage.stringValue = @"This option requires macOS 13 or later.";
+            break;
+        case TBLoginItemDisabled:
+            self.loginItemMessage.stringValue = @"Start protection automatically after restarting your Mac and logging in.";
+            break;
+    }
+    if (self.preview) self.loginItemMessage.stringValue = @"Preview only — your Mac's login items are unchanged.";
+    if (self.loginItemError && self.loginItemErrorStatus == status) {
+        self.loginItemMessage.stringValue = self.loginItemError;
+        self.loginItemMessage.textColor = NSColor.systemRedColor;
+    } else self.loginItemError = nil;
+}
+- (void)toggleLaunchAtLogin:(id)sender {
+    (void)sender;
+    TBLoginItemStatus status = self.loginItem.status;
+    BOOL enable = status != TBLoginItemEnabled && status != TBLoginItemRequiresApproval;
+    NSError *error = nil;
+    BOOL accepted = [self.loginItem setEnabled:enable error:&error];
+    self.loginItemError = accepted ? nil : error.localizedDescription ?: @"Could not change launch at login. Try again from Applications.";
+    self.loginItemErrorStatus = self.loginItem.status;
+    [self refreshLoginItem]; // System state, not a saved checkbox value, is authoritative.
+    if (!accepted || self.loginItem.status == TBLoginItemRequiresApproval) [self showWindow:nil];
+}
+- (void)openLoginItemSettings:(id)sender {
+    (void)sender;
+    if (self.preview) return;
+    if (@available(macOS 13.0, *)) [SMAppService openSystemSettingsLoginItems];
+}
+- (void)applicationDidBecomeActive:(NSNotification *)notification {
+    (void)notification;
+    [self refreshLoginItem];
+}
+- (void)menuWillOpen:(NSMenu *)menu {
+    (void)menu;
+    [self refreshLoginItem];
+}
 - (void)turnOn:(id)sender {
     (void)sender;
     [self.controller turnOnAtTime:NSProcessInfo.processInfo.systemUptime];
@@ -377,6 +472,7 @@ static NSTextField *TBLabel(NSString *text, NSFont *font) {
 }
 - (void)showWindow:(id)sender {
     (void)sender;
+    [self refreshLoginItem];
     [self.window makeKeyAndOrderFront:nil];
     [NSApp activateIgnoringOtherApps:YES];
 }
@@ -384,6 +480,11 @@ static NSTextField *TBLabel(NSString *text, NSFont *font) {
     if ([notification.name isEqualToString:NSWorkspaceWillSleepNotification]) self.systemSleeping = YES;
     else self.screensSleeping = YES;
     [self.controller prepareForSleep];
+    [self refresh];
+}
+- (void)screensaverChanged:(NSNotification *)notification {
+    self.controller.screensaverActive = [notification.name isEqualToString:@"com.apple.screensaver.didstart"];
+    [self.controller pollAtTime:NSProcessInfo.processInfo.systemUptime];
     [self refresh];
 }
 - (void)didWake:(NSNotification *)notification {
@@ -407,6 +508,7 @@ static NSTextField *TBLabel(NSString *text, NSFont *font) {
     [self.timer invalidate];
     [self.controller stop];
     [NSWorkspace.sharedWorkspace.notificationCenter removeObserver:self];
+    [NSDistributedNotificationCenter.defaultCenter removeObserver:self];
     if (self.activity) [NSProcessInfo.processInfo endActivity:self.activity];
     if (self.statusItem) [NSStatusBar.systemStatusBar removeStatusItem:self.statusItem];
 }
@@ -443,12 +545,12 @@ int main(int argc, const char *argv[]) {
             return state == TBPowerStateUnknown ? 3 : 0;
         }
         if (argc == 2 && strcmp(argv[1], "--version") == 0) {
-            puts("Touch Bar Control 1.3.1");
+            puts("Touch Bar Control 1.3.2");
             return 0;
         }
         if (argc == 2 && strcmp(argv[1], "--help") == 0) {
             puts("Usage: Touch Bar Control [--status | --brightness-status | --activity-status | --preview | --resume-on | --restore-original-policy | --version | --help]\n"
-                 "No arguments: open the app and keep the Touch Bar off.\n"
+                 "No arguments: open the app in On mode with 55-second idle protection.\n"
                  "--status: read hardware power state without sending commands.\n"
                  "--brightness-status: read brightness telemetry without sending commands.\n"
                  "--activity-status: read input-idle time and session eligibility; no key events or commands.\n"

@@ -4,7 +4,7 @@ Keep your MacBook's Touch Bar off, or turn it on at a brightness you choose.
 
 ## Download and install
 
-**[Download Touch Bar Control v1.3.1](https://github.com/xerlxzx/touchbar-control/releases/download/v1.3.1/Touch-Bar-Control-1.3.1-arm64.zip)** · [Release notes](https://github.com/xerlxzx/touchbar-control/releases/tag/v1.3.1)
+**[Download Touch Bar Control v1.3.2](https://github.com/xerlxzx/touchbar-control/releases/download/v1.3.2/Touch-Bar-Control-1.3.2-arm64.zip)** · [Release notes](https://github.com/xerlxzx/touchbar-control/releases/tag/v1.3.2)
 
 Install the app through Finder:
 
@@ -17,7 +17,7 @@ Install the app through Finder:
 
 To open a copy you trust from this repository, dismiss that warning, then go to **System Settings → Privacy & Security**. Scroll down, choose **Open Anyway**, and confirm **Open**. See [Apple's instructions](https://support.apple.com/en-au/102445) for details.
 
-**The Touch Bar turns off when the app opens.** Choose **Turn Touch Bar on** in the app if you want it back on.
+**The Touch Bar starts On**, using your saved brightness and automatic idle protection. Choose **Keep Touch Bar off** if you want it to stay dark.
 
 Use this **experimental release on an Apple Silicon Mac**. Hardware testing covers one **13-inch M1 MacBook Pro with a Touch Bar**, running macOS 26.6.2. You can adjust brightness on that model. The download won't run on Intel Macs.
 
@@ -29,9 +29,12 @@ Use this **experimental release on an Apple Silicon Mac**. Hardware testing cove
 | Use the Touch Bar | Choose **Turn Touch Bar on**. Your usual buttons stay in place. |
 | Change its brightness | Move the slider between 50% and 100%. You can save a brightness choice while the Touch Bar is off. |
 | Find the window again | Click the app's menu bar or Dock icon. Closing the window keeps the app running. |
-| Stop the app | Choose **Quit** from its menu. Quitting doesn't turn the Touch Bar back on or reset its brightness settings. |
+| Start automatically | Enable **Launch at login** in the window or menu bar menu (macOS 13 or later). If approval is needed, use **Login Items Settings…**. |
+| Stop the app | Choose **Quit** from its menu. This stops protection, including the 55-second timeout. It doesn't turn the Touch Bar back on or reset its brightness settings. |
 
-While On, the Touch Bar switches off after 55 seconds without input and comes back when you use the keyboard or trackpad. The app remembers your brightness choice, but starts Off each time you open it. Open it from Applications after logging in.
+While On, the Touch Bar switches off after 55 seconds without input and comes back when you use the keyboard or trackpad. It also stays off during the screen saver or a locked/inactive session, then waits for fresh input after you return. The app remembers your brightness choice and starts On each time you open it.
+
+Keep the app running for protection to work. Closing its window is enough; **⌘Q stops the timer**, so macOS dimming and flickering can return. Launch at login is optional and starts the app after you sign in, not before login.
 
 ## Help and project information
 

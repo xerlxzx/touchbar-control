@@ -18,7 +18,7 @@ Build into a separate output folder so you don't replace a running copy:
 ./test.sh
 ```
 
-The tests use fake hardware and an in-memory preference store. They do not link the real hardware provider or send Touch Bar commands. They cover retry limits, power transitions, brightness mapping, saved choices, idle Off and activity recovery, lock/sleep gating, and missing readings.
+The tests use fake hardware and an in-memory preference store. They do not link the real hardware provider or send Touch Bar commands. They cover retry limits, power transitions, brightness mapping, saved choices, idle Off and activity recovery, screen-saver/lock/sleep gating, and missing readings. App lifecycle tests also cover default On, window closing, Quit cleanup, and startup-control states without registering real login items.
 
 Quit other app instances before opening a preview:
 
@@ -26,7 +26,9 @@ Quit other app instances before opening a preview:
 "./work/staged/Touch Bar Control.app/Contents/MacOS/Touch Bar Control" --preview
 ```
 
-Preview keeps its choice in memory and leaves the user's saved preference alone. Keep preview results separate from tests on a physical Touch Bar. Check Off and On, then close and reopen the window. Check the slider with the pointer and keyboard.
+Preview keeps its choices in memory and leaves the user's brightness preference and login items alone. Keep preview results separate from tests on a physical Touch Bar. Check Off and On, close and reopen the window, and toggle Launch at login. Check the slider with the pointer and keyboard.
+
+For physical validation, check a screen saver both with and without locking, starting before 55 seconds and during an existing idle hold. Confirm the strip stays off, unlock alone does not wake it, and subsequent input restores brightness. Check that sleep still suspends control. Test startup separately with the installed app: enable Launch at login, log out/in, verify it opens in On mode, then disable it and verify the login item is removed.
 
 CI runs the tests, builds the app, verifies its local signature, and checks the CLI help/version entry points on pull requests and pushes to `main`. It does not launch hardware control.
 

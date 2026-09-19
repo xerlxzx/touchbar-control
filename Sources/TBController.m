@@ -133,7 +133,7 @@ static const NSTimeInterval TBIdleOffDelay = 55.0;
     _observedState = [_hardware readPowerState];
     _guardingBrightness = YES;
     NSTimeInterval idle = [_hardware inputIdleSeconds];
-    if (![_hardware sessionAllowsControl] || !isfinite(idle) || idle < 0 || idle >= TBIdleOffDelay) {
+    if (_screensaverActive || ![_hardware sessionAllowsControl] || !isfinite(idle) || idle < 0 || idle >= TBIdleOffDelay) {
         [self pollAtTime:now];
         return;
     }
@@ -156,10 +156,16 @@ static const NSTimeInterval TBIdleOffDelay = 55.0;
     if (_failed) return;
 
     if (!_requestedOff && _guardingBrightness) {
-        if (![_hardware sessionAllowsControl]) {
+        if (_screensaverActive || ![_hardware sessionAllowsControl]) {
             _waitingForSession = YES;
             _brightnessVerified = NO;
-            _message = @"Waiting for an unlocked session and an awake display.";
+            // An inactive session forbids waking/brightening, but must not abandon
+            // Off enforcement when macOS locks before the idle deadline.
+            if (!_idleOff) [self beginIdleOffAtTime:now];
+            [self enforceOffAtTime:now];
+            if (!_failed) _message = _screensaverActive
+                ? @"Keeping off while the screen saver is active."
+                : @"Keeping off until the session and display are active again.";
             return;
         }
         if (_waitingForSession) {

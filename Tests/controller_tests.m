@@ -99,6 +99,32 @@ static TBController *MakeController(FakeHardware *hardware) {
 
 int main(void) {
     @autoreleasepool {
+        // Locking before 55 seconds must turn off, not bypass idle protection.
+        FakeHardware *lockedHardware = [FakeHardware new];
+        lockedHardware.state = TBPowerStateOn;
+        TBController *lockedController = MakeController(lockedHardware);
+        [lockedController resumeOnAtTime:0];
+        lockedHardware.sessionAllowsControl = NO;
+        lockedHardware.inputIdleSeconds = 10;
+        [lockedController pollAtTime:10];
+        CHECK(lockedController.idleOff && lockedHardware.offCalls == 1);
+        lockedHardware.state = TBPowerStateOff;
+        [lockedController pollAtTime:11];
+        lockedHardware.state = TBPowerStateOn; // macOS reactivates during the lock.
+        lockedHardware.inputIdleSeconds = 0;
+        [lockedController pollAtTime:12];
+        CHECK(lockedHardware.offCalls == 2 && lockedHardware.onCalls == 0 && lockedHardware.brightnessCalls == 0);
+        lockedHardware.state = TBPowerStateOff;
+        lockedHardware.sessionAllowsControl = YES;
+        [lockedController pollAtTime:13];
+        CHECK(lockedController.idleOff && lockedHardware.onCalls == 0);
+        lockedHardware.inputIdleSeconds = 1;
+        [lockedController pollAtTime:14];
+        CHECK(lockedHardware.onCalls == 0);
+        lockedHardware.inputIdleSeconds = 0.1;
+        [lockedController pollAtTime:14.5];
+        CHECK(!lockedController.idleOff && lockedHardware.onCalls == 1);
+
         FakeHardware *hardware = [FakeHardware new];
         TBController *controller = MakeController(hardware);
         [controller keepOffAtTime:0];
@@ -612,7 +638,7 @@ int main(void) {
         [controller pollAtTime:10];
         CHECK(controller.failed && hardware.onCalls == 1 && hardware.brightnessCalls == 0);
 
-        // On selected in a blocked session sends no power or brightness writes.
+        // On selected in a blocked session permits only Off, then needs fresh input.
         hardware = [FakeHardware new];
         hardware.sessionAllowsControl = NO;
         controller = MakeController(hardware);
@@ -620,10 +646,14 @@ int main(void) {
         hardware.state = TBPowerStateOn;
         hardware.brightnessState.physicalNits = 12;
         [controller pollAtTime:1];
-        CHECK(hardware.onCalls == 0 && hardware.offCalls == 0 && hardware.brightnessCalls == 0);
+        CHECK(hardware.onCalls == 0 && hardware.offCalls == 1 && hardware.brightnessCalls == 0);
+        hardware.state = TBPowerStateOff;
         hardware.sessionAllowsControl = YES;
         [controller pollAtTime:2];
-        CHECK(hardware.brightnessCalls == 1 && hardware.onCalls == 0);
+        CHECK(hardware.brightnessCalls == 0 && hardware.onCalls == 0);
+        hardware.inputIdleSeconds = 0.1;
+        [controller pollAtTime:2.5];
+        CHECK(hardware.onCalls == 1 && hardware.brightnessCalls == 0);
 
         // If macOS wakes first on input, don't send another On or dip brightness again.
         hardware = [FakeHardware new];
@@ -647,6 +677,69 @@ int main(void) {
         hardware.inputIdleSeconds = 0;
         [controller pollAtTime:1];
         CHECK(!controller.idleOff && hardware.onCalls == 0 && hardware.offCalls == 0 && hardware.brightnessCalls == 0);
+
+        // A screensaver without a lock forces Off before the normal idle deadline.
+        hardware = [FakeHardware new];
+        hardware.state = TBPowerStateOn;
+        controller = MakeController(hardware);
+        [controller resumeOnAtTime:0];
+        controller.screensaverActive = YES;
+        hardware.inputIdleSeconds = 5;
+        [controller pollAtTime:5];
+        CHECK(controller.idleOff && hardware.offCalls == 1 && !controller.requestedOff);
+        hardware.state = TBPowerStateOff;
+        hardware.inputIdleSeconds = 0; // A reset idle clock during the saver is not a wake.
+        [controller pollAtTime:6];
+        [controller setBrightnessPercent:80 atTime:7];
+        CHECK(hardware.onCalls == 0 && hardware.brightnessCalls == 0);
+        hardware.state = TBPowerStateOn;
+        [controller pollAtTime:8];
+        CHECK(hardware.offCalls == 2 && hardware.onCalls == 0);
+        hardware.state = TBPowerStateOff;
+        controller.screensaverActive = NO;
+        hardware.sessionAllowsControl = NO; // Saver stopped, but the screen is still locked.
+        [controller pollAtTime:9];
+        CHECK(controller.idleOff && hardware.onCalls == 0);
+        hardware.sessionAllowsControl = YES;
+        [controller pollAtTime:10];
+        CHECK(controller.idleOff && hardware.onCalls == 0);
+        hardware.inputIdleSeconds = 1;
+        [controller pollAtTime:11];
+        CHECK(hardware.onCalls == 0);
+        hardware.inputIdleSeconds = 0.1;
+        [controller pollAtTime:11.5];
+        CHECK(!controller.idleOff && hardware.onCalls == 1);
+
+        // Explicit On during the saver must not flash the strip before the next poll.
+        hardware = [FakeHardware new];
+        controller = MakeController(hardware);
+        controller.screensaverActive = YES;
+        [controller turnOnAtTime:0];
+        CHECK(controller.idleOff && hardware.onCalls == 0 && hardware.brightnessCalls == 0);
+        [controller prepareForSleep];
+        NSUInteger saverSleepReads = hardware.reads;
+        [controller pollAtTime:10];
+        CHECK(hardware.reads == saverSleepReads);
+        [controller resumeAtTime:11];
+        CHECK(controller.idleOff && hardware.onCalls == 0);
+        [controller keepOffAtTime:12];
+        controller.screensaverActive = NO;
+        [controller pollAtTime:13];
+        CHECK(controller.requestedOff && controller.holdingOff && hardware.onCalls == 0);
+
+        // Failed Off requests remain bounded even throughout a screensaver.
+        hardware = [FakeHardware new];
+        hardware.state = TBPowerStateOn;
+        controller = MakeController(hardware);
+        controller.screensaverActive = YES;
+        [controller resumeOnAtTime:0];
+        [controller pollAtTime:1];
+        [controller pollAtTime:2];
+        [controller pollAtTime:3];
+        CHECK(controller.failed && hardware.offCalls == 3 && hardware.onCalls == 0);
+        controller.screensaverActive = NO;
+        [controller pollAtTime:4];
+        CHECK(controller.failed && hardware.offCalls == 3 && hardware.onCalls == 0);
 
         printf("PASS: %lu controller safety assertions. No real hardware provider linked.\n", (unsigned long)assertions);
     }

@@ -5,6 +5,7 @@
 @property(nonatomic, readonly) BOOL holdingOff;
 @property(nonatomic, readonly) BOOL idleOff;
 @property(nonatomic, readonly) BOOL sleeping;
+@property(nonatomic) BOOL screensaverActive; // App notification state; apply on the next poll/action.
 @property(nonatomic, readonly) BOOL failed;
 @property(nonatomic, readonly) BOOL available;
 @property(nonatomic, readonly) BOOL normalBrightnessAvailable;
