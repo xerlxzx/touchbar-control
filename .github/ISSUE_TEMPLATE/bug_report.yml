@@ -5,7 +5,7 @@ body:
     id: app-version
     attributes:
       label: App version
-      placeholder: For example, 1.3.0. Write "unknown" if you're unsure.
+      placeholder: For example, 1.3.5. Write "unknown" if you're unsure.
     validations:
       required: true
   - type: input
@@ -27,7 +27,7 @@ body:
     id: context
     attributes:
       label: Settings and timing (optional)
-      description: If relevant, include On/Off, brightness, whether you were typing or idle, and whether this followed wake or unlock.
+      description: If relevant, include On/Off, brightness, idle duration, and whether this followed idle wake, system sleep, or unlock. For background issues, specify window close, Command-Q, or Stop protection and quit.
   - type: textarea
     id: evidence
     attributes:

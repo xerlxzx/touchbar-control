@@ -14,6 +14,7 @@ mkdir -p "$app_dir/Contents/MacOS" "$app_dir/Contents/Resources"
 xcrun clang -fobjc-arc -Wall -Wextra -Werror -mmacosx-version-min=12.0 \
     -framework Cocoa -framework IOKit -framework CoreGraphics -framework ServiceManagement \
     "$project_dir/Sources/main.m" "$project_dir/Sources/TBHardware.m" \
+    "$project_dir/Sources/TBWakeRequest.m" \
     "$project_dir/Sources/TBController.m" "$project_dir/Sources/TBBrightnessState.m" \
     "$project_dir/Sources/TBBrightnessPreference.m" \
     "$project_dir/Sources/TBLoginItem.m" \

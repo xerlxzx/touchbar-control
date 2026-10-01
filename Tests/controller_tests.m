@@ -675,7 +675,7 @@ int main(void) {
         [controller pollAtTime:1];
         CHECK(hardware.onCalls == 0 && hardware.brightnessCalls == 1 && !controller.idleOff);
 
-        // Quit stops idle enforcement, even if macOS wakes the strip afterward.
+        // Explicitly stopping protection ends enforcement, even if macOS wakes afterward.
         hardware = [FakeHardware new];
         hardware.inputIdleSeconds = 55;
         controller = MakeController(hardware);

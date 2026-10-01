@@ -18,15 +18,17 @@ Build into a separate output folder so you don't replace a running copy:
 ./test.sh
 ```
 
-The tests use fake hardware and an in-memory preference store. They do not link the real hardware provider or send Touch Bar commands. They cover retry limits, power transitions, brightness mapping, saved choices, idle Off and activity recovery, screen-saver/lock/sleep gating, and missing readings. App lifecycle tests also cover default On, window closing, Quit cleanup, and startup-control states without registering real login items.
+The tests use fake hardware and an in-memory preference store. They do not link the real hardware provider or send Touch Bar commands. They cover retry limits, power transitions, brightness mapping, saved choices, idle Off and activity recovery, screen-saver/lock/sleep gating, and missing readings. App lifecycle tests also cover background enforcement after window closing and Command-Q, reopening, system termination reasons, explicit-stop cleanup, and startup-control states without registering real login items.
 
-Quit other app instances before opening a preview:
+Wake API tests use fake Objective-C clients to check the zero-duration argument and failure handling without loading the private framework. To assess visible wake behavior, observe one ordinary idle/wake cycle on the physical strip and record the result separately from command acceptance or driver brightness. Do not equate a passing simulated test with a flash-free panel.
+
+Choose **Stop protection and quit** in other app instances before opening a preview:
 
 ```sh
 "./work/staged/Touch Bar Control.app/Contents/MacOS/Touch Bar Control" --preview
 ```
 
-Preview keeps its choices in memory and leaves the user's brightness preference and login items alone. Keep preview results separate from tests on a physical Touch Bar. Check Off and On, close and reopen the window, and toggle Launch at login. Check the slider with the pointer and keyboard.
+Preview keeps its choices in memory and leaves the user's brightness preference and login items alone. Keep preview results separate from tests on a physical Touch Bar. Check Off and On, close and reopen the window, and toggle Launch at login. Check the slider with the pointer and keyboard. Check that red close, Command-Q, and Dock Quit hide the window and Dock icon but preserve the menu bar controls. Reopen from the menu bar and Applications, then verify **Stop protection and quit** exits fully.
 
 For physical validation, check a screen saver both with and without locking, starting before 55 seconds and during an existing idle hold. Confirm saver entry leaves an active strip on, the timeout switches it off at 55 seconds of input inactivity, and it stays off afterward. The timer measures time since the last input, not an extra 55 seconds from saver entry. Check that unlock alone does not wake an idle-held strip, and subsequent input restores brightness. Also test the existing fallback if macOS starts dimming sooner. Check that sleep still suspends control. Test startup separately with the installed app: enable Launch at login, log out/in, verify it opens in On mode, then disable it and verify the login item is removed.
 
@@ -39,6 +41,8 @@ CI runs the tests, builds the app, verifies its local signature, and checks the 
 ```
 
 The command writes a versioned ZIP and SHA-256 checksum to `work/releases/` after the tests and build finish. The ZIP contains an app for the build Mac's architecture with an ad-hoc signature. See [build and packaging](docs/engineering.md#build-and-packaging) for implementation details.
+
+Before publishing, update both version fields in `Info.plist`, the CLI version in `Sources/main.m`, the README download/checksum links, and the dated changelog entry. Record observed hardware behavior and remaining validation limits in the technical reference and known issues. Build the package from the release commit, verify its checksum and the extracted app's signature, and check `--version` and `--help` without starting hardware control. Publish the ZIP and checksum together under the matching `vX.Y.Z` Git tag after CI passes. Releases remain marked as experimental pre-releases while hardware coverage is limited.
 
 ## Changes to hardware control
 

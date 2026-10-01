@@ -98,6 +98,7 @@ static NSTextField *TBLabel(NSString *text, NSFont *font) {
 @property(nonatomic, strong) id activity;
 @property(nonatomic) BOOL systemSleeping;
 @property(nonatomic) BOOL screensSleeping;
+@property(nonatomic) BOOL stopProtectionRequested;
 @end
 
 @implementation TBAppDelegate
@@ -161,9 +162,12 @@ static NSTextField *TBLabel(NSString *text, NSFont *font) {
                                         action:@selector(orderFrontStandardAboutPanel:) keyEquivalent:@""];
     about.target = NSApp;
     [appMenu addItem:NSMenuItem.separatorItem];
-    NSMenuItem *quit = [appMenu addItemWithTitle:@"Quit Touch Bar Control"
-                                       action:@selector(terminate:) keyEquivalent:@"q"];
-    quit.target = NSApp;
+    NSMenuItem *background = [appMenu addItemWithTitle:@"Run in background"
+                                              action:@selector(runInBackground:) keyEquivalent:@"q"];
+    background.target = self;
+    NSMenuItem *quit = [appMenu addItemWithTitle:@"Stop protection and quit"
+                                       action:@selector(stopProtectionAndQuit:) keyEquivalent:@""];
+    quit.target = self;
     NSMenuItem *controlItem = [NSMenuItem new];
     [main addItem:controlItem];
     NSMenu *controlMenu = [[NSMenu alloc] initWithTitle:@"Control"];
@@ -210,8 +214,10 @@ static NSTextField *TBLabel(NSString *text, NSFont *font) {
     self.launchAtLoginMenuItem = [statusMenu addItemWithTitle:@"Launch at login" action:@selector(toggleLaunchAtLogin:) keyEquivalent:@""];
     self.launchAtLoginMenuItem.target = self;
     [statusMenu addItem:NSMenuItem.separatorItem];
-    quit = [statusMenu addItemWithTitle:@"Quit Touch Bar Control" action:@selector(terminate:) keyEquivalent:@"q"];
-    quit.target = NSApp;
+    background = [statusMenu addItemWithTitle:@"Run in background" action:@selector(runInBackground:) keyEquivalent:@"q"];
+    background.target = self;
+    quit = [statusMenu addItemWithTitle:@"Stop protection and quit" action:@selector(stopProtectionAndQuit:) keyEquivalent:@""];
+    quit.target = self;
     self.statusItem.menu = statusMenu;
 }
 
@@ -315,7 +321,7 @@ static NSTextField *TBLabel(NSString *text, NSFont *font) {
     self.onButton.bezelStyle = NSBezelStyleRounded;
     self.offButton.controlSize = NSControlSizeLarge;
     self.onButton.controlSize = NSControlSizeLarge;
-    self.offButton.toolTip = @"Keep the Touch Bar dark until you turn it on or quit this app.";
+    self.offButton.toolTip = @"Keep the Touch Bar dark until you turn it on or stop protection.";
     self.onButton.toolTip = @"Use normal Touch Bar controls at your selected brightness, with automatic off after 55 seconds idle.";
     [buttons addArrangedSubview:self.offButton];
     [buttons addArrangedSubview:self.onButton];
@@ -339,7 +345,7 @@ static NSTextField *TBLabel(NSString *text, NSFont *font) {
     self.loginItemSettingsButton.bezelStyle = NSBezelStyleRounded;
     [startupGroup addArrangedSubview:self.loginItemSettingsButton];
 
-    NSTextField *footer = TBLabel(@"Starts On. Closing this window keeps protection running in the menu bar. Quitting stops protection, including the 55-second timeout.", [NSFont systemFontOfSize:11]);
+    NSTextField *footer = TBLabel(@"Closing this window or pressing ⌘Q keeps protection running in the menu bar. To exit completely, choose Stop protection and quit.", [NSFont systemFontOfSize:11]);
     footer.textColor = NSColor.secondaryLabelColor;
     [stack addArrangedSubview:footer];
     [footer.widthAnchor constraintEqualToAnchor:stack.widthAnchor].active = YES;
@@ -473,8 +479,46 @@ static NSTextField *TBLabel(NSString *text, NSFont *font) {
 - (void)showWindow:(id)sender {
     (void)sender;
     [self refreshLoginItem];
+    [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
     [self.window makeKeyAndOrderFront:nil];
     [NSApp activateIgnoringOtherApps:YES];
+}
+- (void)runInBackground:(id)sender {
+    (void)sender;
+    // Keep the same controller, timer, and App Nap activity across UI closure.
+    // Also dismiss auxiliary windows such as About before removing the Dock icon.
+    for (NSWindow *window in NSApp.windows) [window orderOut:nil];
+    [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
+}
+- (void)windowWillClose:(NSNotification *)notification {
+    if (notification.object == self.window) [self runInBackground:nil];
+}
+- (void)stopProtectionAndQuit:(id)sender {
+    (void)sender;
+    self.stopProtectionRequested = YES;
+    [NSApp terminate:nil];
+}
+- (NSApplicationTerminateReply)terminationReplyForAppleEvent:(NSAppleEventDescriptor *)event {
+    if (self.stopProtectionRequested) return NSTerminateNow;
+    // loginwindow supplies a quit reason for logout/restart/shutdown. Never
+    // cancel those requests while redirecting ordinary Quit to the menu bar.
+    if (event.eventClass == kCoreEventClass && event.eventID == kAEQuitApplication) {
+        NSAppleEventDescriptor *reason = [event attributeDescriptorForKeyword:kAEQuitReason]
+            ?: [event paramDescriptorForKeyword:kAEQuitReason];
+        switch (reason.typeCodeValue) {
+            case kAEQuitAll:
+            case kAEShutDown:
+            case kAERestart:
+            case kAEReallyLogOut:
+                return NSTerminateNow;
+        }
+    }
+    [self runInBackground:nil];
+    return NSTerminateCancel;
+}
+- (NSApplicationTerminateReply)applicationShouldTerminate:(NSApplication *)sender {
+    (void)sender;
+    return [self terminationReplyForAppleEvent:NSAppleEventManager.sharedAppleEventManager.currentAppleEvent];
 }
 - (void)willSleep:(NSNotification *)notification {
     if ([notification.name isEqualToString:NSWorkspaceWillSleepNotification]) self.systemSleeping = YES;
@@ -510,6 +554,7 @@ static NSTextField *TBLabel(NSString *text, NSFont *font) {
     [NSWorkspace.sharedWorkspace.notificationCenter removeObserver:self];
     [NSDistributedNotificationCenter.defaultCenter removeObserver:self];
     if (self.activity) [NSProcessInfo.processInfo endActivity:self.activity];
+    self.activity = nil;
     if (self.statusItem) [NSStatusBar.systemStatusBar removeStatusItem:self.statusItem];
 }
 @end
@@ -545,18 +590,19 @@ int main(int argc, const char *argv[]) {
             return state == TBPowerStateUnknown ? 3 : 0;
         }
         if (argc == 2 && strcmp(argv[1], "--version") == 0) {
-            puts("Touch Bar Control 1.3.3");
+            puts("Touch Bar Control 1.3.5");
             return 0;
         }
         if (argc == 2 && strcmp(argv[1], "--help") == 0) {
             puts("Usage: Touch Bar Control [--status | --brightness-status | --activity-status | --preview | --resume-on | --restore-original-policy | --version | --help]\n"
                  "No arguments: open the app in On mode with 55-second idle protection.\n"
+                 "Closing the window or Command-Q keeps protection running in the menu bar. Use Stop protection and quit to exit.\n"
                  "--status: read hardware power state without sending commands.\n"
                  "--brightness-status: read brightness telemetry without sending commands.\n"
                  "--activity-status: read input-idle time and session eligibility; no key events or commands.\n"
                  "--preview: open a simulated UI; never access hardware.\n"
                  "--resume-on: adopt On mode without an initial power-on command; includes idle protection.\n"
-                 "--restore-original-policy: explicitly restore this Mac's original Touch Bar minimum0 and automatic brightness. Quit the app first; flashing may return.");
+                 "--restore-original-policy: reset the Touch Bar minimum to 0 and enable automatic brightness (fixed baseline, not a backup). Choose Stop protection and quit first; flashing may return.");
             return 0;
         }
         if (argc == 2 && strcmp(argv[1], "--brightness-status") == 0) {
@@ -582,7 +628,7 @@ int main(int argc, const char *argv[]) {
         for (NSRunningApplication *application in [NSRunningApplication runningApplicationsWithBundleIdentifier:TBBundleIdentifier]) {
             if (application.processIdentifier != NSProcessInfo.processInfo.processIdentifier) {
                 if (preview || resumeOn || restorePolicy) {
-                    fputs("Action not started: Touch Bar Control is already running. Quit that instance first.\n", stderr);
+                    fputs("Action not started: Touch Bar Control is already running. Choose Stop protection and quit in that instance first.\n", stderr);
                     return 4;
                 }
                 [application activateWithOptions:NSApplicationActivateAllWindows | NSApplicationActivateIgnoringOtherApps];

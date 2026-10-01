@@ -29,10 +29,20 @@ NSString *TBPowerStateName(TBPowerState state) {
 - (BOOL)restoreOriginalBrightnessPolicy { abort(); }
 @end
 
-@interface TestAppDelegate : TBAppDelegate
+// Keep lifecycle tests from activating the UI or terminating the test runner.
+@interface TestApplication : NSApplication
+@property(nonatomic) NSApplicationActivationPolicy testActivationPolicy;
+@property(nonatomic) NSApplicationTerminateReply lastTerminationReply;
 @end
-@implementation TestAppDelegate
-- (void)showWindow:(id)sender { (void)sender; [self refreshLoginItem]; } // No foreground activation.
+@implementation TestApplication
+- (BOOL)setActivationPolicy:(NSApplicationActivationPolicy)policy { self.testActivationPolicy = policy; return YES; }
+- (NSApplicationActivationPolicy)activationPolicy { return self.testActivationPolicy; }
+- (void)activateIgnoringOtherApps:(BOOL)flag { (void)flag; }
+- (void)terminate:(id)sender {
+    (void)sender;
+    self.lastTerminationReply = [self.delegate respondsToSelector:@selector(applicationShouldTerminate:)]
+        ? [self.delegate applicationShouldTerminate:self] : NSTerminateNow;
+}
 @end
 
 @interface IdlePreviewHardware : TBPreviewHardware
@@ -62,11 +72,19 @@ NSString *TBPowerStateName(TBPowerState state) {
 }
 @end
 
+static void RunUntil(BOOL (^condition)(void)) {
+    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:5];
+    while (!condition() && deadline.timeIntervalSinceNow > 0)
+        [NSRunLoop.mainRunLoop runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.02]];
+    CHECK(condition());
+}
+
 int main(void) {
     @autoreleasepool {
-        [NSApplication sharedApplication];
+        TestApplication *application = [TestApplication sharedApplication];
         [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
-        TestAppDelegate *delegate = [TestAppDelegate new];
+        TBAppDelegate *delegate = [TBAppDelegate new];
+        application.delegate = delegate;
         delegate.preview = YES;
         [delegate applicationDidFinishLaunching:[NSNotification notificationWithName:NSApplicationDidFinishLaunchingNotification object:NSApp]];
         // Ordinary launch should activate On and the idle guard, without a click.
@@ -133,12 +151,54 @@ int main(void) {
         hardware.state = TBPowerStateOn;
         delegate.controller = [[TBController alloc] initWithHardware:hardware];
         [delegate.controller resumeOnAtTime:NSProcessInfo.processInfo.systemUptime];
+        [delegate.controller setBrightnessPercent:70 atTime:NSProcessInfo.processInfo.systemUptime];
+        [delegate refresh];
+        id backgroundActivity = delegate.activity;
+        CHECK(backgroundActivity != nil);
         [delegate.window close];
         CHECK(![delegate applicationShouldTerminateAfterLastWindowClosed:NSApp]);
-        CHECK(delegate.timer.valid);
+        CHECK(delegate.timer.valid && delegate.activity == backgroundActivity);
+        CHECK(!delegate.window.visible && application.activationPolicy == NSApplicationActivationPolicyAccessory);
+        CHECK(delegate.statusItem != nil && delegate.controller.selectedBrightnessPercent == 70);
         hardware.idle = 55;
-        [delegate.timer fire];
+        // Let the actual scheduled timer run; manually firing it would hide lifecycle failures.
+        RunUntil(^BOOL { return delegate.controller.idleOff && hardware.state == TBPowerStateOff; });
         CHECK(delegate.controller.idleOff && hardware.state == TBPowerStateOff);
+
+        // Reopening and ordinary Quit preserve the controller, activity, and idle hold.
+        TBController *originalController = delegate.controller;
+        [delegate applicationShouldHandleReopen:NSApp hasVisibleWindows:NO];
+        CHECK(delegate.window.visible && application.activationPolicy == NSApplicationActivationPolicyRegular);
+        [application terminate:nil];
+        CHECK(application.lastTerminationReply == NSTerminateCancel);
+        CHECK(!delegate.window.visible && application.activationPolicy == NSApplicationActivationPolicyAccessory);
+        CHECK(delegate.timer.valid && delegate.activity == backgroundActivity);
+        CHECK(delegate.controller == originalController && delegate.controller.idleOff);
+        CHECK(delegate.controller.selectedBrightnessPercent == 70);
+        hardware.idle = 0;
+        RunUntil(^BOOL { return hardware.state == TBPowerStateOn && delegate.controller.brightnessVerified; });
+        CHECK(delegate.controller.selectedBrightnessPercent == 70);
+
+        // The Command-Q menu route must leave idle protection running too.
+        [delegate showWindow:nil];
+        NSMenu *appMenu = NSApp.mainMenu.itemArray.firstObject.submenu;
+        NSMenuItem *background = nil;
+        for (NSMenuItem *item in appMenu.itemArray)
+            if ([item.keyEquivalent isEqualToString:@"q"]) background = item;
+        CHECK(background != nil);
+        CHECK([NSApp sendAction:background.action to:background.target from:background]);
+        CHECK(delegate.timer.valid && !delegate.window.visible);
+        hardware.idle = 55;
+        RunUntil(^BOOL { return delegate.controller.idleOff && hardware.state == TBPowerStateOff; });
+
+        // Manual Off is preserved by closing and reopening; it must not become On.
+        [delegate keepOff:nil];
+        [delegate showWindow:nil];
+        [application terminate:nil];
+        [delegate showWindow:nil];
+        hardware.idle = 0;
+        [delegate.timer fire];
+        CHECK(delegate.controller.requestedOff && hardware.state == TBPowerStateOff);
 
         // Screensaver events preserve the idle deadline; the timer enforces Off at 55.
         hardware.idle = 0;
@@ -156,8 +216,40 @@ int main(void) {
         CHECK(!delegate.controller.screensaverActive && delegate.controller.idleOff);
         CHECK(hardware.state == TBPowerStateOff); // Stopping the saver alone does not authorize On.
 
+        // Background protection must not veto a system logout, restart, or shutdown.
+        // Exercise both the loginwindow attribute and the SDK-documented parameter.
+        for (NSNumber *value in @[@(kAEQuitAll), @(kAEShutDown), @(kAERestart), @(kAEReallyLogOut)]) {
+            for (NSNumber *asAttribute in @[@YES, @NO]) {
+                NSAppleEventDescriptor *event = [NSAppleEventDescriptor appleEventWithEventClass:kCoreEventClass
+                    eventID:kAEQuitApplication targetDescriptor:nil returnID:kAutoGenerateReturnID transactionID:kAnyTransactionID];
+                NSAppleEventDescriptor *reason = [NSAppleEventDescriptor descriptorWithTypeCode:value.unsignedIntValue];
+                if (asAttribute.boolValue) [event setAttributeDescriptor:reason forKeyword:kAEQuitReason];
+                else [event setParamDescriptor:reason forKeyword:kAEQuitReason];
+                CHECK([delegate terminationReplyForAppleEvent:event] == NSTerminateNow);
+            }
+        }
+        NSAppleEventDescriptor *ordinaryQuit = [NSAppleEventDescriptor appleEventWithEventClass:kCoreEventClass
+            eventID:kAEQuitApplication targetDescriptor:nil returnID:kAutoGenerateReturnID transactionID:kAnyTransactionID];
+        CHECK([delegate terminationReplyForAppleEvent:ordinaryQuit] == NSTerminateCancel);
+        [ordinaryQuit setAttributeDescriptor:[NSAppleEventDescriptor descriptorWithTypeCode:'test'] forKeyword:kAEQuitReason];
+        CHECK([delegate terminationReplyForAppleEvent:ordinaryQuit] == NSTerminateCancel);
+        CHECK(delegate.timer.valid && delegate.activity == backgroundActivity);
+
+        // Background mode still releases its activity for sleep and reacquires it on wake.
+        [delegate willSleep:[NSNotification notificationWithName:NSWorkspaceWillSleepNotification object:nil]];
+        CHECK(delegate.controller.sleeping && delegate.activity == nil);
+        [delegate didWake:[NSNotification notificationWithName:NSWorkspaceDidWakeNotification object:nil]];
+        CHECK(!delegate.controller.sleeping && delegate.activity != nil && delegate.timer.valid);
+
+        // Only the separately labelled stop action permits real termination.
+        NSMenuItem *stop = [delegate.statusItem.menu itemWithTitle:@"Stop protection and quit"];
+        CHECK(stop != nil && stop.keyEquivalent.length == 0);
+        CHECK([NSApp sendAction:stop.action to:stop.target from:stop]);
+        CHECK(application.lastTerminationReply == NSTerminateNow);
+        TBPowerState stateBeforeQuit = hardware.state;
         [delegate applicationWillTerminate:[NSNotification notificationWithName:NSApplicationWillTerminateNotification object:NSApp]];
-        CHECK(!delegate.timer.valid && !delegate.controller.guardingBrightness);
+        CHECK(!delegate.timer.valid && !delegate.controller.guardingBrightness && delegate.activity == nil);
+        CHECK(hardware.state == stateBeforeQuit);
         printf("PASS: %lu app lifecycle and login-item assertions. Real hardware access aborts.\n", (unsigned long)assertions);
     }
     return 0;

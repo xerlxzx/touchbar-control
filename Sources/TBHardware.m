@@ -1,5 +1,6 @@
 #import "TBHardware.h"
 #import "TBBrightnessPreference.h"
+#import "TBWakeRequest.h"
 #import <IOKit/IOKitLib.h>
 #import <CoreGraphics/CoreGraphics.h>
 #import <objc/runtime.h>
@@ -137,6 +138,10 @@ NSString *TBPowerStateName(TBPowerState state) {
 }
 
 - (void)prepareBrightnessSupport {
+    if (!TBSupportsImmediateWake(_client)) {
+        _brightnessUnavailabilityReason = @"Immediate Touch Bar wake is unavailable on this macOS version. Keep off remains available.";
+        return;
+    }
     // This brightness configuration has only been validated on this model.
     char model[128] = {0};
     size_t length = sizeof(model);
@@ -276,7 +281,6 @@ NSString *TBPowerStateName(TBPowerState state) {
 }
 - (BOOL)requestOn {
     if (!_available || ![self sessionAllowsControl]) return NO;
-    @try { return [_client turnOn]; }
-    @catch (NSException *exception) { (void)exception; return NO; }
+    return TBRequestWake(_client);
 }
 @end

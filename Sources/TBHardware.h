@@ -26,5 +26,5 @@ FOUNDATION_EXPORT NSString *TBPowerStateName(TBPowerState state);
 @end
 
 @interface TBRealHardware : NSObject <TBHardware>
-- (BOOL)restoreOriginalBrightnessPolicy; // Explicit only: original minimum 0, automatic brightness on.
+- (BOOL)restoreOriginalBrightnessPolicy; // Explicit only: fixed minimum 0 and automatic brightness on; no saved backup.
 @end

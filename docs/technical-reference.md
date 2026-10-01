@@ -7,7 +7,8 @@ For installation and everyday controls, start with the [README](../README.md).
 | Item | Current scope |
 | --- | --- |
 | Tested hardware | M1 MacBook Pro, `MacBookPro17,1` |
-| Tested system | macOS 26.6.2 |
+| Earlier brightness validation | macOS 26.6.2 |
+| v1.3.5 idle/wake validation | macOS 27.0 (26A428), one observed cycle with no visible flash |
 | Brightness controls | Code restricts them to `MacBookPro17,1` |
 | Other Touch Bar Macs | Untested; Off support depends on available private APIs and driver state |
 
@@ -25,7 +26,9 @@ The app starts in On mode at the saved brightness. Screen-saver entry and locked
 
 Automatic wake requires the screen saver to have stopped, an unlocked local session, an awake built-in display, and new input after eligibility returns. A reset idle clock at unlock is not sufficient. Missing activity readings keep the strip off. The app reads elapsed input-idle time without recording keys, pointer positions, or input events. It does not request Input Monitoring or prevent system sleep.
 
-Closing the window leaves the polling timer running. Quitting ends the timer and all enforcement; the 55-second behavior is not installed as a system setting or a separate background service.
+Starting in v1.3.5, app-issued wake uses the private `turnOnWithPeriod:` method with `0.0f`, after validating its signature. Inspection of the macOS 27.0 (26A428) implementation found that plain `turnOn` supplies a 0.5-second period. Skipping that default fade targets the wake transition through low brightness; it does not guarantee a flash-free physical panel or prevent macOS from initiating wake first. Missing immediate-wake support disables On controls while retaining Off support.
+
+Closing the window, Command-Q, and ordinary Quit leave the polling timer and App Nap activity running. The app switches to an accessory activation policy, hiding its Dock icon while retaining its menu bar controls. Reopening restores the window and Dock icon without recreating the controller or resetting its idle hold. **Stop protection and quit** explicitly ends enforcement; logout, restart, and shutdown also permit termination. The 55-second behavior runs in the resident app, not as a system setting or a separate background service.
 
 ## Launch at login
 
@@ -52,13 +55,13 @@ For example:
 "/Applications/Touch Bar Control.app/Contents/MacOS/Touch Bar Control" --brightness-status
 ```
 
-Quit the current instance before using preview or resume mode. Use `--resume-on` during a controlled app update to adopt On without an initial power-on command. Ordinary launch now starts On too, and can power on an eligible, active strip.
+Choose **Stop protection and quit** in the current instance before using preview or resume mode. Use `--resume-on` during a controlled app update to adopt On without an initial power-on command. Ordinary launch now starts On too, and can power on an eligible, active strip.
 
 ### Return to the fixed baseline policy
 
 `--restore-original-policy` **sets minimum brightness to 0 and enables automatic brightness**. These are fixed values. The app keeps no backup of the prior policy, so this command cannot restore per-device settings from before installation.
 
-Quit the app before running this command. Lower brightness may bring flashing back.
+Choose **Stop protection and quit** before running this command. Lower brightness may bring flashing back.
 
 ```sh
 "/Applications/Touch Bar Control.app/Contents/MacOS/Touch Bar Control" --restore-original-policy
@@ -66,4 +69,4 @@ Quit the app before running this command. Lower brightness may bring flashing ba
 
 The command prints before/after readings and checks the two policy values. It sends no power-on command. It leaves the keyboard inactivity setting and saved slider choice intact. Exit code 4 means another app instance prevented the action; exit code 5 means the command could not verify completion. Inspect the output after a failure because one setting may have changed before the other failed.
 
-Off and Quit do not run this command.
+Off, closing the controls, and **Stop protection and quit** do not run this command.

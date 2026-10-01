@@ -9,11 +9,13 @@ Touch Bar Control is an Objective-C macOS application built with Clang and Apple
 | Application | `Sources/main.m` | App lifecycle, window, menu bar, CLI dispatch, and preview hardware |
 | Controller | `Sources/TBController.*` | Requested mode, observed state, idle transitions, brightness verification, and retries |
 | Hardware adapter | `Sources/TBHardware.*` | Private API calls, display and session checks, and driver readings |
+| Wake request | `Sources/TBWakeRequest.*` | Private wake-method signature checks and a zero-duration wake command |
 | Brightness preferences | `Sources/TBBrightnessPreference.*` | Slider snapping, nits mapping, and preference storage |
 | Brightness readings | `Sources/TBBrightnessState.*` | Shared values from the hardware adapter |
 | Login item | `Sources/TBLoginItem.*` | System registration/status on macOS 13+, or isolated preview state |
 | Controller tests | `Tests/controller_tests.m` | Fake hardware, isolated preferences, and state-transition assertions |
 | App tests | `Tests/app_tests.m` | Default launch, window lifecycle, screen-saver callbacks, and login-item UI state |
+| Wake tests | `Tests/wake_tests.m` | Wake arguments and failure handling with simulated private-API clients |
 
 ## Control flow
 
@@ -29,9 +31,11 @@ Sleep notifications suspend controller actions. Recovery requires an eligible se
 
 - A brightness selection while Off updates the target without powering on the strip.
 - Power-on requests follow the removal of Off enforcement.
+- App-issued wake uses `turnOnWithPeriod:0.0f` after checking its Objective-C signature. Unsupported, rejected, or throwing calls do not fall back to the default fade.
 - Brightness writes require valid driver limits and an eligible session.
 - Off enforcement allows three unverified requests. Brightness recovery allows three requests within 60 seconds, with at least one second between writes.
-- Quit stops monitoring without sending a power-on command or resetting the brightness policy.
+- Window close and ordinary Quit preserve monitoring, the App Nap activity, and controller state. The controls and Dock icon are hidden until reopened.
+- Only **Stop protection and quit** or system termination stops monitoring, without sending a power-on command or resetting the brightness policy. The delegate allows quit events carrying the SDK's logout/restart/shutdown reasons, so background residency does not veto the end of a session.
 
 The app stores the selected percentage through `TBPreferenceStore`, using `NSUserDefaults` in normal operation and isolated memory in preview and tests. The percentage snaps to six steps from 50% to 100%. See the [technical reference](technical-reference.md) for brightness mapping and platform constraints.
 
@@ -49,7 +53,9 @@ The app stores the selected percentage through `TBPreferenceStore`, using `NSUse
 
 `test.sh` compiles the controller, brightness values, preferences, and fake hardware against Foundation. A second executable compiles the app delegate with Cocoa, simulated hardware, and preview/fake login items. Both exclude `TBHardware.m` and IOKit; real-device entry points in the app tests abort if reached. Login-item tests never register with ServiceManagement.
 
-The assertions cover power transitions, bounded retries, brightness mapping, saved choices, idle Off, input recovery, screen-saver entry before the deadline, the 54.99/55-second boundary while locked or in a saver, early-dimming fallback, screen-saver/lock/sleep gating, and missing readings. App tests cover default On, continued enforcement after window close, Quit cleanup, and login-item success, errors, pending approval, unsupported systems, and external status changes. The macOS CI workflow runs these tests, checks shell syntax, builds the app, verifies its signature, and checks the CLI help/version paths.
+The wake API boundary has its own Foundation-only executable. Fake clients expose the real selector shapes, including deliberately incompatible ones; tests check the explicit zero-second duration, absence of default-fade calls, and bounded failure handling. No private framework is loaded by these tests.
+
+The assertions cover power transitions, bounded retries, brightness mapping, saved choices, idle Off, input recovery, screen-saver entry before the deadline, the 54.99/55-second boundary while locked or in a saver, early-dimming fallback, screen-saver/lock/sleep gating, and missing readings. App tests run the scheduled timer after window close and Command-Q, checking idle Off, input recovery, preserved brightness/manual Off, and reopen behavior. They also cover ordinary Quit, explicit-stop cleanup, system quit reasons, sleep/wake activity ownership, and login-item success, errors, pending approval, unsupported systems, and external status changes. The macOS CI workflow runs these tests, checks shell syntax, builds the app, verifies its signature, and checks the CLI help/version paths.
 
 Physical Touch Bar behavior falls outside automated coverage. Hardware reports distinguish command acceptance, driver readings, and visible panel behavior, and identify the app version, Mac model, and macOS version.
 

@@ -2,6 +2,12 @@
 set -euo pipefail
 project_dir="$(cd -- "$(dirname -- "$0")" && pwd)"
 mkdir -p "$project_dir/work"
+# The wake API boundary is exercised using fake Objective-C clients only.
+xcrun clang -fobjc-arc -Wall -Wextra -Werror -mmacosx-version-min=12.0 \
+    -framework Foundation -I "$project_dir/Sources" \
+    "$project_dir/Tests/wake_tests.m" "$project_dir/Sources/TBWakeRequest.m" \
+    -o "$project_dir/work/wake-tests"
+"$project_dir/work/wake-tests"
 # This test executable does not link TBHardware.m or IOKit.
 xcrun clang -fobjc-arc -Wall -Wextra -Werror -mmacosx-version-min=12.0 \
     -framework Foundation -I "$project_dir/Sources" \

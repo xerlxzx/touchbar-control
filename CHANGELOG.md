@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.3.5 · 2026-10-01
+
+- Request Touch Bar wake with an explicit zero-second fade. The default `turnOn` implementation on the inspected macOS 27 build supplies a half-second transition, which passes through low brightness before settling.
+- Check the immediate-wake method's signature before enabling On controls. Keep Off available if that method is missing or changed; never fall back silently to the default fade.
+- Add hardware-free tests for the zero-duration argument, rejected requests, exceptions, missing methods, and incompatible signatures. The suite passes 286 assertions.
+- After installing v1.3.5, a physical check found no visible flash in one ordinary idle/wake cycle on the M1 Touch Bar Mac running macOS 27.0 (26A428). Full-system sleep/wake remains unverified; macOS may start waking the strip before the app acts.
+- Keep protection running in the menu bar after closing the window, pressing Command-Q, or using ordinary Quit. Hide the Dock icon and preserve the existing mode, brightness, timer, and App Nap activity.
+- Restore the controls and Dock icon on reopen without restarting the controller.
+- Add **Stop protection and quit** for a complete exit. Continue to honor system logout, restart, and shutdown.
+- Add lifecycle regressions that let the real scheduled timer enforce idle Off and restore brightness while the controls are closed, plus system-termination and sleep/wake checks.
+- Include the background-operation changes from the local v1.3.4 test build, which was not published separately.
+
 ## 1.3.3 · 2026-09-19
 
 - Start in On mode using the saved brightness and 55-second idle protection.
