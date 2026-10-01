@@ -248,20 +248,27 @@ static NSTextField *TBLabel(NSString *text, NSFont *font) {
     heading.alignment = NSLayoutAttributeLeading;
     heading.spacing = 5;
     [heading addArrangedSubview:TBLabel(@"Touch Bar", [NSFont systemFontOfSize:24 weight:NSFontWeightSemibold])];
-    NSTextField *subtitle = TBLabel(self.preview ? @"Preview — controls do not affect your Touch Bar."
-                                                 : @"Turn the strip on or keep it off.",
-                                    [NSFont systemFontOfSize:13]);
-    subtitle.textColor = NSColor.secondaryLabelColor;
-    [heading addArrangedSubview:subtitle];
+    if (self.preview) {
+        NSTextField *subtitle = TBLabel(@"Preview — controls do not affect your Touch Bar.", [NSFont systemFontOfSize:13]);
+        subtitle.textColor = NSColor.secondaryLabelColor;
+        [heading addArrangedSubview:subtitle];
+    }
     [stack addArrangedSubview:heading];
 
+    NSStackView *statusGroup = [NSStackView new];
+    statusGroup.orientation = NSUserInterfaceLayoutOrientationVertical;
+    statusGroup.alignment = NSLayoutAttributeLeading;
+    statusGroup.spacing = 10;
+    [stack addArrangedSubview:statusGroup];
+    [statusGroup.widthAnchor constraintEqualToAnchor:stack.widthAnchor].active = YES;
+    [statusGroup addArrangedSubview:TBLabel(@"Status", [NSFont systemFontOfSize:13])];
     NSBox *statusBox = [NSBox new];
     statusBox.boxType = NSBoxPrimary;
-    statusBox.title = @"Status";
+    statusBox.titlePosition = NSNoTitle;
     statusBox.contentViewMargins = NSMakeSize(12, 10);
     statusBox.translatesAutoresizingMaskIntoConstraints = NO;
-    [stack addArrangedSubview:statusBox];
-    [statusBox.widthAnchor constraintEqualToAnchor:stack.widthAnchor].active = YES;
+    [statusGroup addArrangedSubview:statusBox];
+    [statusBox.widthAnchor constraintEqualToAnchor:statusGroup.widthAnchor].active = YES;
     [statusBox.heightAnchor constraintEqualToConstant:90].active = YES;
 
     NSTextField *requestedTitle = TBLabel(@"Requested", [NSFont systemFontOfSize:13]);
@@ -279,8 +286,8 @@ static NSTextField *TBLabel(NSString *text, NSFont *font) {
     grid.translatesAutoresizingMaskIntoConstraints = NO;
     [statusBox.contentView addSubview:grid];
     [NSLayoutConstraint activateConstraints:@[
+        [grid.centerYAnchor constraintEqualToAnchor:statusBox.contentView.centerYAnchor],
         [grid.leadingAnchor constraintEqualToAnchor:statusBox.contentView.leadingAnchor],
-        [grid.topAnchor constraintEqualToAnchor:statusBox.contentView.topAnchor],
         [grid.trailingAnchor constraintLessThanOrEqualToAnchor:statusBox.contentView.trailingAnchor]
     ]];
 
@@ -377,6 +384,9 @@ static NSTextField *TBLabel(NSString *text, NSFont *font) {
         : observed;
     BOOL messageChanged = ![self.messageLabel.stringValue isEqualToString:controller.message];
     self.messageLabel.stringValue = controller.message;
+    // The status card already shows a verified level; keep this area for
+    // transitions and actionable problems instead of repeating steady-state text.
+    self.messageLabel.hidden = controller.brightnessVerified;
     self.messageLabel.textColor = controller.failed ? NSColor.systemRedColor : NSColor.labelColor;
     BOOL canRetryOff = controller.available && (!controller.holdingOff || controller.idleOff);
     self.offButton.enabled = canRetryOff;
@@ -590,7 +600,7 @@ int main(int argc, const char *argv[]) {
             return state == TBPowerStateUnknown ? 3 : 0;
         }
         if (argc == 2 && strcmp(argv[1], "--version") == 0) {
-            puts("Touch Bar Control 1.3.5");
+            puts("Touch Bar Control 1.3.6");
             return 0;
         }
         if (argc == 2 && strcmp(argv[1], "--help") == 0) {

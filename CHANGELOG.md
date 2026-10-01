@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.3.6 · Quality of Life Changes
+
+- Keep the v1.3.5 control behavior and background operation.
+- Center Requested and Observed vertically while preserving left alignment.
+- Add space between the Status heading and its box.
+- Simplify the window text and show status messages only when needed.
+
 ## 1.3.5 · 2026-10-01
 
 - Request Touch Bar wake with an explicit zero-second fade. The default `turnOn` implementation on the inspected macOS 27 build supplies a half-second transition, which passes through low brightness before settling.

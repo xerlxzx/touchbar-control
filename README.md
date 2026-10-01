@@ -35,7 +35,7 @@ Use this **experimental release on an Apple Silicon Mac**. Hardware testing cove
 
 While On, the Touch Bar switches off after 55 seconds without input and comes back when you use the keyboard or trackpad. The same 55-second inactivity timeout continues during the screen saver or a locked/inactive session. Starting the screen saver keeps the current Touch Bar state; once the idle timeout turns it off, it waits for fresh input after you return. The app remembers your brightness choice and starts On when its process launches. Reopening the controls preserves the current mode.
 
-Version 1.3.5 removes the default half-second fade from app-issued wake requests. One physical idle/wake check showed no visible flash after this change. Wake from full system sleep remains unverified; see [known issues](docs/known-issues.md).
+Version 1.3.5 removes the default half-second fade from app-issued wake requests. One physical idle/wake check showed no visible flash after this change. Flashing can still occur on wake; see [known issues](docs/known-issues.md).
 
 Protection stays active in the background after closing the window or using ordinary Quit, including **⌘Q** and the Dock's Quit command. Your selected mode and brightness are preserved. **Stop protection and quit**, Force Quit, and logout end protection, so macOS dimming and flickering can return. Launch at login is optional and starts the app after you sign in, not before login.
 

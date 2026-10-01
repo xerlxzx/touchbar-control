@@ -2,7 +2,7 @@
 
 ## Brief flashes on wake
 
-You may still see a short Touch Bar flash when your Mac wakes from system sleep, before the app reapplies Off or your chosen brightness. Full-system sleep/wake has not been validated with the latest wake change.
+You may still see a short Touch Bar flash when your Mac wakes from system sleep, before the app reapplies Off or your chosen brightness. The app does not guarantee flash-free recovery from system sleep or inactivity.
 
 Version 1.3.5 requests a zero-duration wake instead of the private API's default half-second fade, avoiding the app-requested gradual transition through low brightness. The request is validated and tested with simulated clients. A physical check confirmed no visible flash in one ordinary 55-second idle/wake cycle on the M1 Touch Bar Mac running macOS 27.0 (26A428). That observation does not cover all wake paths: macOS can wake the strip before the app's next poll, and physical panel behavior is not measured by driver telemetry.
 
@@ -18,4 +18,4 @@ On mode previously returned before Off enforcement whenever the session was lock
 
 Version 1.3.3 keeps the 55-second inactivity timeout running through the screen saver and locked/inactive sessions. Saver entry preserves the current state; the idle threshold or early-dimming fallback starts an Off hold. It then continues bounded Off enforcement and requires fresh input after the session becomes eligible again. Regression tests cover these transitions. Visible behavior during a real screen-saver/lock cycle still needs hardware validation. Screen-saver notifications and Touch Bar control depend on undocumented macOS interfaces.
 
-When updating, exit the old copy before replacing it and launch the new copy from Applications. Use **Stop protection and quit** in v1.3.4 or later, or **Quit** in earlier versions. Keeping the older process running does not apply a downloaded or locally built fix. Check **About Touch Bar Control** for version 1.3.5.
+When updating, exit the old copy before replacing it and launch the new copy from Applications. Use **Stop protection and quit** in v1.3.4 or later, or **Quit** in earlier versions. Keeping the older process running does not apply a downloaded or locally built fix. Version 1.3.6 keeps the v1.3.5 control behavior with quality-of-life interface changes.
