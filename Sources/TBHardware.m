@@ -1,6 +1,7 @@
 #import "TBHardware.h"
 #import "TBBrightnessPreference.h"
 #import "TBWakeRequest.h"
+#import "TBServiceCache.h"
 #import <IOKit/IOKitLib.h>
 #import <CoreGraphics/CoreGraphics.h>
 #import <objc/runtime.h>
@@ -20,9 +21,8 @@
 static double TBNumber(id value);
 typedef struct { double current, minimum, maximum; } TBDriverBrightness;
 
-static TBDriverBrightness TBReadDriverBrightness(void) {
+static TBDriverBrightness TBReadDriverBrightness(io_service_t parent) {
     TBDriverBrightness result = {NAN, NAN, NAN};
-    io_service_t parent = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceNameMatching("backlight-dfr"));
     if (!parent) return result;
     io_iterator_t children = IO_OBJECT_NULL;
     if (IORegistryEntryGetChildIterator(parent, kIOServicePlane, &children) == KERN_SUCCESS) {
@@ -58,9 +58,7 @@ static double TBNumber(id value) {
     return [value isKindOfClass:NSNumber.class] ? [value doubleValue] : NAN;
 }
 
-TBPowerState TBReadPowerState(void) {
-    io_service_t parent = IOServiceGetMatchingService(kIOMainPortDefault,
-                                                     IOServiceNameMatching("backlight-dfr"));
+static TBPowerState TBReadPowerStateFromService(io_service_t parent) {
     if (!parent) return TBPowerStateUnknown;
     io_iterator_t children = IO_OBJECT_NULL;
     kern_return_t result = IORegistryEntryGetChildIterator(parent, kIOServicePlane, &children);
@@ -89,6 +87,11 @@ TBPowerState TBReadPowerState(void) {
     return observed;
 }
 
+TBPowerState TBReadPowerState(void) {
+    return TBReadPowerStateFromService(IOServiceGetMatchingService(kIOMainPortDefault,
+                                                                   IOServiceNameMatching("backlight-dfr")));
+}
+
 NSString *TBPowerStateName(TBPowerState state) {
     switch (state) {
         case TBPowerStateOff: return @"Off";
@@ -104,10 +107,14 @@ NSString *TBPowerStateName(TBPowerState state) {
     id _brightnessClient;
     BOOL _normalBrightnessAvailable;
     NSString *_brightnessUnavailabilityReason;
+    TBServiceCache *_backlightService;
+    TBServiceCache *_idleService;
 }
 
 - (instancetype)init {
     if (!(self = [super init])) return nil;
+    _backlightService = [[TBServiceCache alloc] initWithName:"backlight-dfr" matchingClass:NO];
+    _idleService = [[TBServiceCache alloc] initWithName:"IOHIDSystem" matchingClass:YES];
     _unavailabilityReason = @"";
     _brightnessUnavailabilityReason = @"Normal brightness is unavailable. Keep off is still available.";
     // Keep the framework loaded for the client's lifetime. No private symbols are linked at build time.
@@ -129,7 +136,7 @@ NSString *TBPowerStateName(TBPowerState state) {
         _available = NO;
     }
     if (!_available) _unavailabilityReason = @"This macOS version does not provide the expected Touch Bar controls.";
-    if (_available && TBReadPowerState() == TBPowerStateUnknown) {
+    if (_available && [self readPowerState] == TBPowerStateUnknown) {
         _available = NO;
         _unavailabilityReason = @"No supported Touch Bar was found. Reopen the app after the Mac is fully awake.";
     }
@@ -198,7 +205,9 @@ NSString *TBPowerStateName(TBPowerState state) {
             state.brightness = TBNumber(brightness[@"Brightness"]);
             state.physicalNits = TBNumber(brightness[@"NitsPhysical"]);
         }
-        TBDriverBrightness driver = TBReadDriverBrightness();
+        TBDriverBrightness driver = TBReadDriverBrightness([_backlightService copyService]);
+        if (!isfinite(driver.current) || !isfinite(driver.minimum) || !isfinite(driver.maximum))
+            [_backlightService invalidate];
         state.driverNits = driver.current;
         state.hardwareMinimumNits = driver.minimum;
         state.hardwareMaximumNits = driver.maximum;
@@ -242,9 +251,17 @@ NSString *TBPowerStateName(TBPowerState state) {
 
 - (BOOL)available { return _available; }
 - (NSString *)unavailabilityReason { return _unavailabilityReason; }
-- (TBPowerState)readPowerState { return TBReadPowerState(); }
+- (void)invalidateCachedServices {
+    [_backlightService invalidate];
+    [_idleService invalidate];
+}
+- (TBPowerState)readPowerState {
+    TBPowerState state = TBReadPowerStateFromService([_backlightService copyService]);
+    if (state == TBPowerStateUnknown) [_backlightService invalidate];
+    return state;
+}
 - (NSTimeInterval)inputIdleSeconds {
-    io_service_t service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("IOHIDSystem"));
+    io_service_t service = [_idleService copyService];
     if (!service) return NAN;
     CFTypeRef raw = IORegistryEntryCreateCFProperty(service, CFSTR("HIDIdleTime"), kCFAllocatorDefault, 0);
     IOObjectRelease(service);
@@ -254,7 +271,11 @@ NSString *TBPowerStateName(TBPowerState state) {
             CFNumberGetValue(raw, kCFNumberDoubleType, &nanoseconds);
         CFRelease(raw);
     }
-    return isfinite(nanoseconds) && nanoseconds >= 0 ? nanoseconds / 1e9 : NAN;
+    if (!isfinite(nanoseconds) || nanoseconds < 0) {
+        [_idleService invalidate];
+        return NAN;
+    }
+    return nanoseconds / 1e9;
 }
 - (BOOL)sessionAllowsControl {
     NSDictionary *session = CFBridgingRelease(CGSessionCopyCurrentDictionary());

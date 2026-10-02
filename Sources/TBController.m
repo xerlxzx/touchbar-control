@@ -350,6 +350,7 @@ static const NSTimeInterval TBIdleOffDelay = 55.0;
 }
 
 - (void)prepareForSleep {
+    if ([_hardware respondsToSelector:@selector(invalidateCachedServices)]) [_hardware invalidateCachedServices];
     _sleeping = YES;
     _brightnessVerified = NO;
     _waitingForSession = YES;
@@ -357,6 +358,7 @@ static const NSTimeInterval TBIdleOffDelay = 55.0;
 }
 
 - (void)resumeAtTime:(NSTimeInterval)now {
+    if ([_hardware respondsToSelector:@selector(invalidateCachedServices)]) [_hardware invalidateCachedServices];
     _sleeping = NO;
     // Wake must not remove an existing failure limit; retry is an explicit action.
     if (_holdingOff) {

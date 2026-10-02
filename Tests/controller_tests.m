@@ -17,6 +17,7 @@ static NSUInteger assertions = 0;
 @property(nonatomic) NSUInteger offCalls;
 @property(nonatomic) NSUInteger onCalls;
 @property(nonatomic) NSUInteger reads;
+@property(nonatomic) NSUInteger cacheInvalidations;
 @property(nonatomic) BOOL normalBrightnessAvailable;
 @property(nonatomic, copy) NSString *brightnessUnavailabilityReason;
 @property(nonatomic, strong) TBBrightnessState *brightnessState;
@@ -55,6 +56,7 @@ static NSUInteger assertions = 0;
     return self;
 }
 - (TBPowerState)readPowerState { self.reads++; return self.state; }
+- (void)invalidateCachedServices { self.cacheInvalidations++; }
 - (BOOL)requestImmediateOff { self.offCalls++; return self.acceptOff; }
 - (BOOL)requestOn {
     CHECK(!self.controller.holdingOff); // The ordering is a safety invariant.
@@ -209,12 +211,14 @@ int main(void) {
         [controller keepOffAtTime:0];
         [controller prepareForSleep];
         CHECK(controller.sleeping && controller.holdingOff);
+        CHECK(hardware.cacheInvalidations == 1);
         NSUInteger readsBeforeSleep = hardware.reads;
         hardware.state = TBPowerStateOn;
         [controller pollAtTime:500];
         CHECK(hardware.reads == readsBeforeSleep && hardware.offCalls == 0);
         [controller resumeAtTime:501];
         CHECK(!controller.sleeping && controller.holdingOff && hardware.offCalls == 1);
+        CHECK(hardware.cacheInvalidations == 2);
         [controller stop];
         [controller pollAtTime:600];
         CHECK(!controller.holdingOff && hardware.onCalls == 0 && hardware.offCalls == 1);

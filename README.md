@@ -39,6 +39,12 @@ Version 1.3.5 removes the default half-second fade from app-issued wake requests
 
 Protection stays active in the background after closing the window or using ordinary Quit, including **⌘Q** and the Dock's Quit command. Your selected mode and brightness are preserved. **Stop protection and quit**, Force Quit, and logout end protection, so macOS dimming and flickering can return. Launch at login is optional and starts the app after you sign in, not before login.
 
+## Source improvements in 1.3.7
+
+Version 1.3.7 reduces repeated UI updates and hardware-service lookups while preserving the existing control timing and background protection. Five paired local benchmarks measured 80.5% less hidden-window UI update time, 53.0% less power-read time, 47.7% less idle-read time, and 11.6% less process CPU per tick in a representative read-only monitoring loop. These measurements do not establish battery-life or whole-app CPU gains.
+
+Read the [optimization changelog](CHANGELOG.md), [benchmark report and limitations](docs/performance.md), or [raw results](docs/performance-results.json). [Build from source](CONTRIBUTING.md#build-and-test) to use these changes; the packaged download above remains v1.3.5.
+
 ## Help and project information
 
 - [Known issue: brief flashes on wake](docs/known-issues.md)
@@ -46,6 +52,7 @@ Protection stays active in the background after closing the window or using ordi
 - [Technical details and command-line options](docs/technical-reference.md)
 - [Contributing and running tests](CONTRIBUTING.md)
 - [Architecture, build, and testing](docs/engineering.md)
+- [Performance measurements and reproduction](docs/performance.md)
 - [What's changed](CHANGELOG.md)
 
 ## License

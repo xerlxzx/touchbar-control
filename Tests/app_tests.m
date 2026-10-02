@@ -72,6 +72,16 @@ NSString *TBPowerStateName(TBPowerState state) {
 }
 @end
 
+@interface CountingLabel : NSTextField
+@property(nonatomic) NSUInteger writes;
+@end
+@implementation CountingLabel
+- (void)setStringValue:(NSString *)value {
+    self.writes++;
+    [super setStringValue:value];
+}
+@end
+
 static void RunUntil(BOOL (^condition)(void)) {
     NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:5];
     while (!condition() && deadline.timeIntervalSinceNow > 0)
@@ -92,6 +102,36 @@ int main(void) {
         [delegate.timer fire];
         CHECK(delegate.controller.observedState == TBPowerStateOn);
         CHECK(!delegate.controller.failed);
+
+        // Stable polling must not rewrite labels; a hidden window catches up on reopen.
+        NSTextField *originalLabel = delegate.requestedLabel;
+        CountingLabel *label = [CountingLabel new];
+        label.stringValue = originalLabel.stringValue;
+        label.writes = 0;
+        delegate.requestedLabel = label;
+        [delegate refresh];
+        [delegate refresh];
+        CHECK(label.writes == 0);
+        [delegate runInBackground:nil];
+        [delegate keepOff:nil];
+        CHECK(label.writes == 0);
+        CHECK(delegate.offMenuItem.state == NSControlStateValueOn);
+        CHECK(delegate.activity != nil);
+        [delegate showWindow:nil];
+        CHECK(label.writes == 1 && [label.stringValue containsString:@"Keep off"]);
+        delegate.requestedLabel = originalLabel;
+        [delegate turnOn:nil];
+        [delegate refresh];
+
+        // Pointer previews still update without committing or resetting the thumb.
+        delegate.brightnessSlider.trackingPointer = YES;
+        delegate.brightnessSlider.doubleValue = 80;
+        [delegate refresh];
+        CHECK([delegate.brightnessLabel.stringValue isEqualToString:@"Brightness 80%"]);
+        CHECK(delegate.brightnessSlider.doubleValue == 80 && delegate.controller.selectedBrightnessPercent == 50);
+        delegate.brightnessSlider.trackingPointer = NO;
+        [delegate refresh];
+        CHECK(delegate.brightnessSlider.doubleValue == 50);
 
         // Preview toggles are in-memory and do not persist into a new preview.
         CHECK(delegate.launchAtLoginButton.state == NSControlStateValueOff);
