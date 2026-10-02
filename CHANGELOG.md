@@ -7,6 +7,7 @@
 - Enable `-O2` in release builds and tests without fast-math.
 - Preserve the 100 ms control timer, 55-second inactivity threshold, immediate wake, brightness checks, and bounded retries.
 - Pass 352 assertions covering control safety, wake requests, cache ownership/invalidation, UI updates, background operation, and login items.
+- Verify the installed v1.3.7 build retains one running process across window close, reopen, and Command-Q, preserving the saved brightness and Launch at login setting. Full-system sleep/wake and a fresh login remain untested.
 
 Five paired local benchmark runs compared the v1.3.6 source with these optimizations on an M1 MacBook Pro:
 

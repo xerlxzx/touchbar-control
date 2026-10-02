@@ -47,3 +47,9 @@ The computer remained in normal use, so these are local measurements rather than
 ## Verification
 
 All 352 assertions pass at `-O2`: 56 service-cache, 12 wake API, 207 controller, and 77 app lifecycle/UI/login-item assertions. Coverage includes cache ownership and invalidation, notification failure, background timer operation, reopen updates, pointer previews, the idle deadline, bounded retries, and sleep/wake gating. The optimized app builds and its ad-hoc signature verifies. Physical sleep/wake behavior with the optimized app has not been tested. The installed app was not replaced during benchmarking; measurements ran alongside it.
+
+### Installed build verification · 2026-10-02
+
+After the benchmark report and optimization code were pushed and CI passed, v1.3.7 (build 14) replaced the installed v1.3.6 app. The old process was explicitly stopped before replacement, the old bundle was moved to Trash, and the new app was launched through macOS Launch Services.
+
+The installed executable matched the verified staged build and passed signature verification. One instance was running, and the same process survived window close, reopening, and Command-Q. The saved 50% brightness and enabled Launch at login setting were retained. A read-only check after Command-Q reported power On, automatic brightness disabled, dimming step zero, 184 nits from the driver, and 184.5 physical nits from software telemetry. These are driver/API readings, not an optical panel measurement. Full-system sleep/wake and a fresh login were not exercised.
