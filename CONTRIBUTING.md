@@ -34,6 +34,16 @@ For physical validation, check a screen saver both with and without locking, sta
 
 CI runs the tests, builds the app, verifies its local signature, and checks the CLI help/version entry points on pull requests and pushes to `main`. It does not launch hardware control.
 
+## Reproduce the optimization benchmarks
+
+On supported Touch Bar hardware in an active, unlocked session, run:
+
+```sh
+./scripts/benchmark.sh c13ae21 5
+```
+
+This compares the original v1.3.6 source with the current optimized source in five alternating pairs. The harness sends no hardware commands and saves raw measurements under `work/benchmark.*`. See the [benchmark report](docs/performance.md) for workload definitions, validation, and limits. The ordinary test suite remains hardware-free.
+
 ## Package a release
 
 ```sh

@@ -1,0 +1,561 @@
+{
+  "date": "2026-10-02",
+  "baseline_commit": "c13ae213752b926ff62a53692fd74f0edc9283b1",
+  "optimized_branch": "codex/reduce-polling-overhead",
+  "optimized_source_sha256": "1543f4bab4c1f68eac03bd06957c4c1edde0e9db540c7761b81a82cde427be83",
+  "hardware": "MacBookPro17,1; Apple M1; 8 GB RAM",
+  "os": "macOS 27.0 (26A428)",
+  "compiler": "Apple clang 21.0.0 (clang-2100.3.34.2)",
+  "optimization": {
+    "before": "-O0",
+    "after": "-O2"
+  },
+  "paired_runs": 5,
+  "order": "before/after on odd runs, after/before on even runs",
+  "summary": {
+    "brightness_read": {
+      "metric": "wall_us_per_iteration",
+      "before_median": 579.6566666685976,
+      "after_median": 546.6933333082125,
+      "reduction_percent": 5.686699602685841,
+      "before_range": [
+        490.283333347179,
+        635.8866666172011
+      ],
+      "after_range": [
+        502.6933333526055,
+        577.3199999627346
+      ]
+    },
+    "idle_read": {
+      "metric": "wall_us_per_iteration",
+      "before_median": 8.619000000180677,
+      "after_median": 4.5104999881004915,
+      "reduction_percent": 47.66794305597008,
+      "before_range": [
+        8.128000001306646,
+        9.357999995700084
+      ],
+      "after_range": [
+        4.160500000580214,
+        4.940499988151714
+      ]
+    },
+    "paced_read_loop": {
+      "metric": "cpu_us_per_iteration",
+      "before_median": 2015.6200000000003,
+      "after_median": 1782.3899999999996,
+      "reduction_percent": 11.571129478770835,
+      "before_range": [
+        1927.5600000000004,
+        2383.2
+      ],
+      "after_range": [
+        1625.91,
+        1869.15
+      ]
+    },
+    "power_read": {
+      "metric": "wall_us_per_iteration",
+      "before_median": 17.885499997646548,
+      "after_median": 8.413000003201887,
+      "reduction_percent": 52.96189648425313,
+      "before_range": [
+        17.317000005277805,
+        19.518500004778616
+      ],
+      "after_range": [
+        8.274499996332452,
+        9.951000000000931
+      ]
+    },
+    "session_read": {
+      "metric": "wall_us_per_iteration",
+      "before_median": 119.98200000380166,
+      "after_median": 114.66600000858307,
+      "reduction_percent": 4.43066459556446,
+      "before_range": [
+        111.38699998264201,
+        139.35399998445064
+      ],
+      "after_range": [
+        109.56400001305155,
+        139.23699999577366
+      ]
+    },
+    "ui_hidden": {
+      "metric": "wall_us_per_iteration",
+      "before_median": 5.361650000850204,
+      "after_median": 1.0451499998453073,
+      "reduction_percent": 80.50693350592493,
+      "before_range": [
+        5.304999998770654,
+        5.734350001148414
+      ],
+      "after_range": [
+        0.9930000000167638,
+        1.124300000083167
+      ]
+    },
+    "ui_visible": {
+      "metric": "wall_us_per_iteration",
+      "before_median": 5.407899999408983,
+      "after_median": 4.368449999310542,
+      "reduction_percent": 19.220954533405575,
+      "before_range": [
+        5.2266500002588145,
+        5.719150000368245
+      ],
+      "after_range": [
+        4.326149998814799,
+        4.43505000002915
+      ]
+    }
+  },
+  "samples": {
+    "before": [
+      {
+        "brightness_read": {
+          "cpu_us_per_iteration": 260.7800000000001,
+          "elapsed_seconds": 0.1907659999851603,
+          "iterations": 300,
+          "wall_us_per_iteration": 635.8866666172011
+        },
+        "idle_read": {
+          "cpu_us_per_iteration": 8.112000000000009,
+          "elapsed_seconds": 0.01625600000261329,
+          "iterations": 2000,
+          "wall_us_per_iteration": 8.128000001306646
+        },
+        "paced_read_loop": {
+          "cpu_us_per_iteration": 2383.2,
+          "elapsed_seconds": 10.358705999999074,
+          "iterations": 100,
+          "wall_us_per_iteration": 103587.05999999074
+        },
+        "power_read": {
+          "cpu_us_per_iteration": 19.18900000000001,
+          "elapsed_seconds": 0.03903700000955723,
+          "iterations": 2000,
+          "wall_us_per_iteration": 19.518500004778616
+        },
+        "session_read": {
+          "cpu_us_per_iteration": 38.83900000000006,
+          "elapsed_seconds": 0.13935399998445064,
+          "iterations": 1000,
+          "wall_us_per_iteration": 139.35399998445064
+        },
+        "ui_hidden": {
+          "cpu_us_per_iteration": 5.64115,
+          "elapsed_seconds": 0.11468700002296828,
+          "iterations": 20000,
+          "wall_us_per_iteration": 5.734350001148414
+        },
+        "ui_visible": {
+          "cpu_us_per_iteration": 5.547149999999999,
+          "elapsed_seconds": 0.11035899998387322,
+          "iterations": 20000,
+          "wall_us_per_iteration": 5.517949999193661
+        }
+      },
+      {
+        "brightness_read": {
+          "cpu_us_per_iteration": 249.15333333333328,
+          "elapsed_seconds": 0.18847999998251908,
+          "iterations": 300,
+          "wall_us_per_iteration": 628.2666666083969
+        },
+        "idle_read": {
+          "cpu_us_per_iteration": 8.591500000000002,
+          "elapsed_seconds": 0.017238000000361353,
+          "iterations": 2000,
+          "wall_us_per_iteration": 8.619000000180677
+        },
+        "paced_read_loop": {
+          "cpu_us_per_iteration": 2146.9000000000005,
+          "elapsed_seconds": 10.350860000005923,
+          "iterations": 100,
+          "wall_us_per_iteration": 103508.60000005923
+        },
+        "power_read": {
+          "cpu_us_per_iteration": 17.318499999999986,
+          "elapsed_seconds": 0.03463400001055561,
+          "iterations": 2000,
+          "wall_us_per_iteration": 17.317000005277805
+        },
+        "session_read": {
+          "cpu_us_per_iteration": 35.49200000000002,
+          "elapsed_seconds": 0.11138699998264201,
+          "iterations": 1000,
+          "wall_us_per_iteration": 111.38699998264201
+        },
+        "ui_hidden": {
+          "cpu_us_per_iteration": 5.358600000000001,
+          "elapsed_seconds": 0.10609999997541308,
+          "iterations": 20000,
+          "wall_us_per_iteration": 5.304999998770654
+        },
+        "ui_visible": {
+          "cpu_us_per_iteration": 5.22575,
+          "elapsed_seconds": 0.10453300000517629,
+          "iterations": 20000,
+          "wall_us_per_iteration": 5.2266500002588145
+        }
+      },
+      {
+        "brightness_read": {
+          "cpu_us_per_iteration": 217.49,
+          "elapsed_seconds": 0.1470850000041537,
+          "iterations": 300,
+          "wall_us_per_iteration": 490.283333347179
+        },
+        "idle_read": {
+          "cpu_us_per_iteration": 8.794999999999996,
+          "elapsed_seconds": 0.017909999995026737,
+          "iterations": 2000,
+          "wall_us_per_iteration": 8.954999997513369
+        },
+        "paced_read_loop": {
+          "cpu_us_per_iteration": 1938.7299999999998,
+          "elapsed_seconds": 10.305618000013055,
+          "iterations": 100,
+          "wall_us_per_iteration": 103056.18000013055
+        },
+        "power_read": {
+          "cpu_us_per_iteration": 17.841999999999995,
+          "elapsed_seconds": 0.035770999995293096,
+          "iterations": 2000,
+          "wall_us_per_iteration": 17.885499997646548
+        },
+        "session_read": {
+          "cpu_us_per_iteration": 33.16600000000003,
+          "elapsed_seconds": 0.11344099999405444,
+          "iterations": 1000,
+          "wall_us_per_iteration": 113.44099999405444
+        },
+        "ui_hidden": {
+          "cpu_us_per_iteration": 5.32705,
+          "elapsed_seconds": 0.10688999999547377,
+          "iterations": 20000,
+          "wall_us_per_iteration": 5.344499999773689
+        },
+        "ui_visible": {
+          "cpu_us_per_iteration": 5.745,
+          "elapsed_seconds": 0.1143830000073649,
+          "iterations": 20000,
+          "wall_us_per_iteration": 5.719150000368245
+        }
+      },
+      {
+        "brightness_read": {
+          "cpu_us_per_iteration": 235.85999999999996,
+          "elapsed_seconds": 0.17389700000057928,
+          "iterations": 300,
+          "wall_us_per_iteration": 579.6566666685976
+        },
+        "idle_read": {
+          "cpu_us_per_iteration": 9.15249999999998,
+          "elapsed_seconds": 0.018715999991400167,
+          "iterations": 2000,
+          "wall_us_per_iteration": 9.357999995700084
+        },
+        "paced_read_loop": {
+          "cpu_us_per_iteration": 2015.6200000000003,
+          "elapsed_seconds": 10.357338000001619,
+          "iterations": 100,
+          "wall_us_per_iteration": 103573.38000001619
+        },
+        "power_read": {
+          "cpu_us_per_iteration": 18.12950000000002,
+          "elapsed_seconds": 0.036311999981990084,
+          "iterations": 2000,
+          "wall_us_per_iteration": 18.155999990995042
+        },
+        "session_read": {
+          "cpu_us_per_iteration": 34.896000000000036,
+          "elapsed_seconds": 0.12349500000709668,
+          "iterations": 1000,
+          "wall_us_per_iteration": 123.49500000709668
+        },
+        "ui_hidden": {
+          "cpu_us_per_iteration": 5.331299999999999,
+          "elapsed_seconds": 0.10723300001700409,
+          "iterations": 20000,
+          "wall_us_per_iteration": 5.361650000850204
+        },
+        "ui_visible": {
+          "cpu_us_per_iteration": 5.43205,
+          "elapsed_seconds": 0.10749599998234771,
+          "iterations": 20000,
+          "wall_us_per_iteration": 5.374799999117386
+        }
+      },
+      {
+        "brightness_read": {
+          "cpu_us_per_iteration": 227.75666666666658,
+          "elapsed_seconds": 0.1614289999997709,
+          "iterations": 300,
+          "wall_us_per_iteration": 538.096666665903
+        },
+        "idle_read": {
+          "cpu_us_per_iteration": 8.179500000000006,
+          "elapsed_seconds": 0.016380999993998557,
+          "iterations": 2000,
+          "wall_us_per_iteration": 8.190499996999279
+        },
+        "paced_read_loop": {
+          "cpu_us_per_iteration": 1927.5600000000004,
+          "elapsed_seconds": 10.35003100000904,
+          "iterations": 100,
+          "wall_us_per_iteration": 103500.3100000904
+        },
+        "power_read": {
+          "cpu_us_per_iteration": 17.466499999999996,
+          "elapsed_seconds": 0.035134000005200505,
+          "iterations": 2000,
+          "wall_us_per_iteration": 17.567000002600253
+        },
+        "session_read": {
+          "cpu_us_per_iteration": 34.750999999999976,
+          "elapsed_seconds": 0.11998200000380166,
+          "iterations": 1000,
+          "wall_us_per_iteration": 119.98200000380166
+        },
+        "ui_hidden": {
+          "cpu_us_per_iteration": 5.35615,
+          "elapsed_seconds": 0.10791799999424256,
+          "iterations": 20000,
+          "wall_us_per_iteration": 5.395899999712128
+        },
+        "ui_visible": {
+          "cpu_us_per_iteration": 5.477899999999999,
+          "elapsed_seconds": 0.10815799998817965,
+          "iterations": 20000,
+          "wall_us_per_iteration": 5.407899999408983
+        }
+      }
+    ],
+    "after": [
+      {
+        "brightness_read": {
+          "cpu_us_per_iteration": 207.51333333333326,
+          "elapsed_seconds": 0.15445799997542053,
+          "iterations": 300,
+          "wall_us_per_iteration": 514.8599999180684
+        },
+        "idle_read": {
+          "cpu_us_per_iteration": 4.389000000000004,
+          "elapsed_seconds": 0.00877700001001358,
+          "iterations": 2000,
+          "wall_us_per_iteration": 4.38850000500679
+        },
+        "paced_read_loop": {
+          "cpu_us_per_iteration": 1869.15,
+          "elapsed_seconds": 10.348319000011543,
+          "iterations": 100,
+          "wall_us_per_iteration": 103483.19000011543
+        },
+        "power_read": {
+          "cpu_us_per_iteration": 8.315500000000004,
+          "elapsed_seconds": 0.016625999996904284,
+          "iterations": 2000,
+          "wall_us_per_iteration": 8.312999998452142
+        },
+        "session_read": {
+          "cpu_us_per_iteration": 33.179000000000016,
+          "elapsed_seconds": 0.11466600000858307,
+          "iterations": 1000,
+          "wall_us_per_iteration": 114.66600000858307
+        },
+        "ui_hidden": {
+          "cpu_us_per_iteration": 0.99635,
+          "elapsed_seconds": 0.01992600000812672,
+          "iterations": 20000,
+          "wall_us_per_iteration": 0.996300000406336
+        },
+        "ui_visible": {
+          "cpu_us_per_iteration": 4.3306000000000004,
+          "elapsed_seconds": 0.08652299997629598,
+          "iterations": 20000,
+          "wall_us_per_iteration": 4.326149998814799
+        }
+      },
+      {
+        "brightness_read": {
+          "cpu_us_per_iteration": 205.50666666666663,
+          "elapsed_seconds": 0.16834400000516325,
+          "iterations": 300,
+          "wall_us_per_iteration": 561.1466666838775
+        },
+        "idle_read": {
+          "cpu_us_per_iteration": 4.865499999999995,
+          "elapsed_seconds": 0.009880999976303428,
+          "iterations": 2000,
+          "wall_us_per_iteration": 4.940499988151714
+        },
+        "paced_read_loop": {
+          "cpu_us_per_iteration": 1625.91,
+          "elapsed_seconds": 10.331567000015639,
+          "iterations": 100,
+          "wall_us_per_iteration": 103315.67000015639
+        },
+        "power_read": {
+          "cpu_us_per_iteration": 9.710499999999996,
+          "elapsed_seconds": 0.019902000000001863,
+          "iterations": 2000,
+          "wall_us_per_iteration": 9.951000000000931
+        },
+        "session_read": {
+          "cpu_us_per_iteration": 40.14999999999999,
+          "elapsed_seconds": 0.13923699999577366,
+          "iterations": 1000,
+          "wall_us_per_iteration": 139.23699999577366
+        },
+        "ui_hidden": {
+          "cpu_us_per_iteration": 1.1962500000000003,
+          "elapsed_seconds": 0.022486000001663342,
+          "iterations": 20000,
+          "wall_us_per_iteration": 1.124300000083167
+        },
+        "ui_visible": {
+          "cpu_us_per_iteration": 4.41,
+          "elapsed_seconds": 0.08825200001592748,
+          "iterations": 20000,
+          "wall_us_per_iteration": 4.412600000796374
+        }
+      },
+      {
+        "brightness_read": {
+          "cpu_us_per_iteration": 231.41666666666652,
+          "elapsed_seconds": 0.16400799999246374,
+          "iterations": 300,
+          "wall_us_per_iteration": 546.6933333082125
+        },
+        "idle_read": {
+          "cpu_us_per_iteration": 4.160499999999997,
+          "elapsed_seconds": 0.008321000001160428,
+          "iterations": 2000,
+          "wall_us_per_iteration": 4.160500000580214
+        },
+        "paced_read_loop": {
+          "cpu_us_per_iteration": 1801.8,
+          "elapsed_seconds": 10.355959999986226,
+          "iterations": 100,
+          "wall_us_per_iteration": 103559.59999986226
+        },
+        "power_read": {
+          "cpu_us_per_iteration": 8.481500000000004,
+          "elapsed_seconds": 0.01698500002385117,
+          "iterations": 2000,
+          "wall_us_per_iteration": 8.492500011925586
+        },
+        "session_read": {
+          "cpu_us_per_iteration": 32.891,
+          "elapsed_seconds": 0.11043400000198744,
+          "iterations": 1000,
+          "wall_us_per_iteration": 110.43400000198744
+        },
+        "ui_hidden": {
+          "cpu_us_per_iteration": 1.091099999999999,
+          "elapsed_seconds": 0.020902999996906146,
+          "iterations": 20000,
+          "wall_us_per_iteration": 1.0451499998453073
+        },
+        "ui_visible": {
+          "cpu_us_per_iteration": 4.45295,
+          "elapsed_seconds": 0.08870100000058301,
+          "iterations": 20000,
+          "wall_us_per_iteration": 4.43505000002915
+        }
+      },
+      {
+        "brightness_read": {
+          "cpu_us_per_iteration": 210.5866666666667,
+          "elapsed_seconds": 0.15080800000578165,
+          "iterations": 300,
+          "wall_us_per_iteration": 502.6933333526055
+        },
+        "idle_read": {
+          "cpu_us_per_iteration": 5.1584999999999965,
+          "elapsed_seconds": 0.009020999976200983,
+          "iterations": 2000,
+          "wall_us_per_iteration": 4.5104999881004915
+        },
+        "paced_read_loop": {
+          "cpu_us_per_iteration": 1761.0399999999997,
+          "elapsed_seconds": 10.34552000000258,
+          "iterations": 100,
+          "wall_us_per_iteration": 103455.2000000258
+        },
+        "power_read": {
+          "cpu_us_per_iteration": 8.413500000000004,
+          "elapsed_seconds": 0.016826000006403774,
+          "iterations": 2000,
+          "wall_us_per_iteration": 8.413000003201887
+        },
+        "session_read": {
+          "cpu_us_per_iteration": 33.701999999999984,
+          "elapsed_seconds": 0.11826400001882575,
+          "iterations": 1000,
+          "wall_us_per_iteration": 118.26400001882575
+        },
+        "ui_hidden": {
+          "cpu_us_per_iteration": 0.9930500000000009,
+          "elapsed_seconds": 0.019860000000335276,
+          "iterations": 20000,
+          "wall_us_per_iteration": 0.9930000000167638
+        },
+        "ui_visible": {
+          "cpu_us_per_iteration": 4.4331000000000005,
+          "elapsed_seconds": 0.0873579999897629,
+          "iterations": 20000,
+          "wall_us_per_iteration": 4.367899999488145
+        }
+      },
+      {
+        "brightness_read": {
+          "cpu_us_per_iteration": 237.5900000000001,
+          "elapsed_seconds": 0.1731959999888204,
+          "iterations": 300,
+          "wall_us_per_iteration": 577.3199999627346
+        },
+        "idle_read": {
+          "cpu_us_per_iteration": 5.188000000000012,
+          "elapsed_seconds": 0.009023999999044463,
+          "iterations": 2000,
+          "wall_us_per_iteration": 4.5119999995222315
+        },
+        "paced_read_loop": {
+          "cpu_us_per_iteration": 1782.3899999999996,
+          "elapsed_seconds": 10.353237000002991,
+          "iterations": 100,
+          "wall_us_per_iteration": 103532.37000002991
+        },
+        "power_read": {
+          "cpu_us_per_iteration": 8.22450000000001,
+          "elapsed_seconds": 0.016548999992664903,
+          "iterations": 2000,
+          "wall_us_per_iteration": 8.274499996332452
+        },
+        "session_read": {
+          "cpu_us_per_iteration": 32.52100000000002,
+          "elapsed_seconds": 0.10956400001305155,
+          "iterations": 1000,
+          "wall_us_per_iteration": 109.56400001305155
+        },
+        "ui_hidden": {
+          "cpu_us_per_iteration": 1.046050000000001,
+          "elapsed_seconds": 0.020920000009937212,
+          "iterations": 20000,
+          "wall_us_per_iteration": 1.0460000004968606
+        },
+        "ui_visible": {
+          "cpu_us_per_iteration": 4.446550000000001,
+          "elapsed_seconds": 0.08736899998621084,
+          "iterations": 20000,
+          "wall_us_per_iteration": 4.368449999310542
+        }
+      }
+    ]
+  }
+}

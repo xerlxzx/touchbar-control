@@ -9,6 +9,7 @@ Touch Bar Control is an Objective-C macOS application built with Clang and Apple
 | Application | `Sources/main.m` | App lifecycle, window, menu bar, CLI dispatch, and preview hardware |
 | Controller | `Sources/TBController.*` | Requested mode, observed state, idle transitions, brightness verification, and retries |
 | Hardware adapter | `Sources/TBHardware.*` | Private API calls, display and session checks, and driver readings |
+| Service discovery cache | `Sources/TBServiceCache.*` | Retained IORegistry service handles with termination and sleep/wake invalidation |
 | Wake request | `Sources/TBWakeRequest.*` | Private wake-method signature checks and a zero-duration wake command |
 | Brightness preferences | `Sources/TBBrightnessPreference.*` | Slider snapping, nits mapping, and preference storage |
 | Brightness readings | `Sources/TBBrightnessState.*` | Shared values from the hardware adapter |
@@ -39,9 +40,13 @@ Sleep notifications suspend controller actions. Recovery requires an eligible se
 
 The app stores the selected percentage through `TBPreferenceStore`, using `NSUserDefaults` in normal operation and isolated memory in preview and tests. The percentage snaps to six steps from 50% to 100%. See the [technical reference](technical-reference.md) for brightness mapping and platform constraints.
 
+The 100 ms protection timer also refreshes menu state and App Nap ownership while the window is hidden. Window-only controls refresh when visible and immediately on reopening; unchanged values are not reassigned. Pointer tracking still previews the selected slider step without committing a hardware write.
+
+The hardware adapter retains discovery handles for `backlight-dfr` and `IOHIDSystem`. It still enumerates children and reads live properties on each observation. The cache runs on the adapter's run-loop thread and releases handles after service-termination notifications, failed readings, or sleep/wake. If notifications cannot be installed, lookups remain uncached. Display identity, session eligibility, driver bounds, and the independent power-state lookup immediately before brightness writes remain freshly validated.
+
 ## Build and packaging
 
-`build.sh` compiles for the host architecture with ARC, `-Wall -Wextra -Werror`, and a macOS 12 deployment target. It links Cocoa, IOKit, CoreGraphics, and ServiceManagement, copies `Info.plist` into the app bundle, then applies and verifies an ad-hoc signature. ServiceManagement's macOS 13 login-item API is guarded by runtime availability checks.
+`build.sh` compiles for the host architecture with ARC, `-O2`, `-Wall -Wextra -Werror`, and a macOS 12 deployment target. Tests use the same optimization level. Fast-math is not enabled: missing readings rely on NaN and finite-value checks. The build links Cocoa, IOKit, CoreGraphics, and ServiceManagement, copies `Info.plist` into the app bundle, then applies and verifies an ad-hoc signature. ServiceManagement's macOS 13 login-item API is guarded by runtime availability checks.
 
 `Resources/AppIcon.png` is the source artwork. During the build, `scripts/build-icon.sh` uses `sips` and `iconutil` to generate standard and Retina icon sizes from 16 to 1024 pixels. The bundle contains `Contents/Resources/AppIcon.icns`, referenced by `CFBundleIconFile`, before code signing.
 
@@ -55,8 +60,14 @@ The app stores the selected percentage through `TBPreferenceStore`, using `NSUse
 
 The wake API boundary has its own Foundation-only executable. Fake clients expose the real selector shapes, including deliberately incompatible ones; tests check the explicit zero-second duration, absence of default-fade calls, and bounded failure handling. No private framework is loaded by these tests.
 
+Service-cache tests compile the production cache against fake IOKit functions. They verify reference ownership, service replacement after termination, explicit invalidation, failed retains, absent services, notification failures, and cleanup. App tests also check that stable polling does not rewrite labels, hidden controls catch up on reopening, and pointer previews preserve the uncommitted slider position.
+
 The assertions cover power transitions, bounded retries, brightness mapping, saved choices, idle Off, input recovery, screen-saver entry before the deadline, the 54.99/55-second boundary while locked or in a saver, early-dimming fallback, screen-saver/lock/sleep gating, and missing readings. App tests run the scheduled timer after window close and Command-Q, checking idle Off, input recovery, preserved brightness/manual Off, and reopen behavior. They also cover ordinary Quit, explicit-stop cleanup, system quit reasons, sleep/wake activity ownership, and login-item success, errors, pending approval, unsupported systems, and external status changes. The macOS CI workflow runs these tests, checks shell syntax, builds the app, verifies its signature, and checks the CLI help/version paths.
 
 Physical Touch Bar behavior falls outside automated coverage. Hardware reports distinguish command acceptance, driver readings, and visible panel behavior, and identify the app version, Mac model, and macOS version.
 
 Build commands and contribution requirements are in [CONTRIBUTING.md](../CONTRIBUTING.md).
+
+## Performance measurement
+
+`./scripts/benchmark.sh c13ae21 5` compares that baseline revision at `-O0` with the current sources at `-O2`, in five pairs with alternating execution order. It requires supported Touch Bar hardware and writes raw JSON samples and a summary under `work/benchmark.*`. UI measurements use simulated hardware and a window that reports visibility without appearing on screen. Hardware measurements read telemetry only and can run alongside the installed app. The paced workload approximates steady On monitoring at 10 Hz, with brightness reads at 2 Hz, and measures process CPU time. It does not issue hardware writes or measure battery use, server CPU, drawing, or physical wake behavior. See [the recorded comparison](performance.md).

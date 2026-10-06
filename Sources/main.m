@@ -68,6 +68,10 @@ static NSTextField *TBLabel(NSString *text, NSFont *font) {
     return label;
 }
 
+static void TBSetLabelText(NSTextField *label, NSString *text) {
+    if (![label.stringValue isEqualToString:text]) label.stringValue = text;
+}
+
 @interface TBAppDelegate : NSObject <NSApplicationDelegate, NSWindowDelegate, NSMenuDelegate>
 @property(nonatomic) BOOL preview;
 @property(nonatomic) BOOL resumeOn;
@@ -359,56 +363,71 @@ static NSTextField *TBLabel(NSString *text, NSFont *font) {
     [stack.bottomAnchor constraintLessThanOrEqualToAnchor:self.window.contentView.bottomAnchor constant:-18].active = YES;
 }
 
-- (void)refresh {
-    TBController *controller = self.controller;
-    NSString *requested = controller.requestedOff ? @"Keep off" : [NSString stringWithFormat:@"On · %ld%% brightness", (long)controller.selectedBrightnessPercent];
-    if (controller.failed) requested = [requested stringByAppendingString:@" · paused"];
-    else if (controller.sleeping) requested = [requested stringByAppendingString:@" · sleeping"];
-    else if (controller.idleOff) requested = [requested stringByAppendingString:@" · idle"];
-    else if (controller.holdingOff) requested = [requested stringByAppendingString:@" · active"];
-    self.requestedLabel.stringValue = requested;
-    NSInteger displayedPercent = self.brightnessSlider.trackingPointer
-        ? TBSnapBrightnessPercent(self.brightnessSlider.doubleValue) : controller.selectedBrightnessPercent;
-    self.brightnessLabel.stringValue = [NSString stringWithFormat:@"Brightness %ld%%", (long)displayedPercent];
-    // Avoid moving the thumb back to the committed value while the user drags it.
-    if (!self.brightnessSlider.trackingPointer) self.brightnessSlider.doubleValue = controller.selectedBrightnessPercent;
-    self.brightnessSlider.enabled = controller.normalBrightnessAvailable;
-    NSString *observed = TBPowerStateName(controller.observedState);
-    if (!controller.sleeping && controller.observedState == TBPowerStateOn &&
-        !controller.requestedOff && !controller.idleOff && isfinite(controller.brightnessState.driverNits) && controller.brightnessState) {
-        observed = [NSString stringWithFormat:@"On · %.0f nits reported%@", controller.brightnessState.driverNits,
-                    controller.brightnessVerified ? @" · verified" : @""];
-    }
-    self.observedLabel.stringValue = controller.sleeping
-        ? [NSString stringWithFormat:@"Sleeping · last reported %@", TBPowerStateName(controller.observedState)]
-        : observed;
-    BOOL messageChanged = ![self.messageLabel.stringValue isEqualToString:controller.message];
-    self.messageLabel.stringValue = controller.message;
-    // The status card already shows a verified level; keep this area for
-    // transitions and actionable problems instead of repeating steady-state text.
-    self.messageLabel.hidden = controller.brightnessVerified;
-    self.messageLabel.textColor = controller.failed ? NSColor.systemRedColor : NSColor.labelColor;
-    BOOL canRetryOff = controller.available && (!controller.holdingOff || controller.idleOff);
-    self.offButton.enabled = canRetryOff;
-    self.onButton.enabled = controller.available && controller.normalBrightnessAvailable;
-    self.offMenuItem.enabled = canRetryOff;
-    self.onMenuItem.enabled = self.onButton.enabled;
-    self.offActionMenuItem.enabled = canRetryOff;
-    self.onActionMenuItem.enabled = self.onButton.enabled;
-    self.offMenuItem.state = controller.holdingOff && controller.requestedOff ? NSControlStateValueOn : NSControlStateValueOff;
-    self.onMenuItem.state = (!controller.requestedOff && !controller.failed) ? NSControlStateValueOn : NSControlStateValueOff;
-    self.statusLine.title = [NSString stringWithFormat:@"Touch Bar: %@%@", TBPowerStateName(controller.observedState),
-                            controller.failed ? @" · control paused" : controller.idleOff ? @" · idle protection" : controller.holdingOff ? @" · keeping off" : @""];
-    self.statusItem.button.toolTip = self.statusLine.title;
-    BOOL needsActivity = (controller.holdingOff || controller.guardingBrightness) && !controller.sleeping;
+- (void)refreshActivity {
+    BOOL needsActivity = (self.controller.holdingOff || self.controller.guardingBrightness) && !self.controller.sleeping;
     if (needsActivity && !self.activity) {
-        // Prevent App Nap while monitoring, without preventing display or system sleep.
+        // Protection owns this activity even while the controls are hidden.
         self.activity = [NSProcessInfo.processInfo beginActivityWithOptions:NSActivityUserInitiatedAllowingIdleSystemSleep
                                                                    reason:@"Maintain Touch Bar control"];
     } else if (!needsActivity && self.activity) {
         [NSProcessInfo.processInfo endActivity:self.activity];
         self.activity = nil;
     }
+}
+
+- (void)refresh {
+    TBController *controller = self.controller;
+    [self refreshActivity];
+    BOOL canRetryOff = controller.available && (!controller.holdingOff || controller.idleOff);
+    BOOL canTurnOn = controller.available && controller.normalBrightnessAvailable;
+    if (self.offMenuItem.enabled != canRetryOff) self.offMenuItem.enabled = canRetryOff;
+    if (self.onMenuItem.enabled != canTurnOn) self.onMenuItem.enabled = canTurnOn;
+    if (self.offActionMenuItem.enabled != canRetryOff) self.offActionMenuItem.enabled = canRetryOff;
+    if (self.onActionMenuItem.enabled != canTurnOn) self.onActionMenuItem.enabled = canTurnOn;
+    NSControlStateValue offState = controller.holdingOff && controller.requestedOff ? NSControlStateValueOn : NSControlStateValueOff;
+    NSControlStateValue onState = !controller.requestedOff && !controller.failed ? NSControlStateValueOn : NSControlStateValueOff;
+    if (self.offMenuItem.state != offState) self.offMenuItem.state = offState;
+    if (self.onMenuItem.state != onState) self.onMenuItem.state = onState;
+    NSString *status = [NSString stringWithFormat:@"Touch Bar: %@%@", TBPowerStateName(controller.observedState),
+                       controller.failed ? @" · control paused" : controller.idleOff ? @" · idle protection" : controller.holdingOff ? @" · keeping off" : @""];
+    if (![self.statusLine.title isEqualToString:status]) self.statusLine.title = status;
+    if (![self.statusItem.button.toolTip isEqualToString:status]) self.statusItem.button.toolTip = status;
+
+    // Window controls catch up immediately in showWindow:. Menu state and
+    // background protection above must never depend on window visibility.
+    if (!self.window.visible) return;
+    NSString *requested = controller.requestedOff ? @"Keep off" : [NSString stringWithFormat:@"On · %ld%% brightness", (long)controller.selectedBrightnessPercent];
+    if (controller.failed) requested = [requested stringByAppendingString:@" · paused"];
+    else if (controller.sleeping) requested = [requested stringByAppendingString:@" · sleeping"];
+    else if (controller.idleOff) requested = [requested stringByAppendingString:@" · idle"];
+    else if (controller.holdingOff) requested = [requested stringByAppendingString:@" · active"];
+    TBSetLabelText(self.requestedLabel, requested);
+    NSInteger displayedPercent = self.brightnessSlider.trackingPointer
+        ? TBSnapBrightnessPercent(self.brightnessSlider.doubleValue) : controller.selectedBrightnessPercent;
+    TBSetLabelText(self.brightnessLabel, [NSString stringWithFormat:@"Brightness %ld%%", (long)displayedPercent]);
+    // Avoid moving the thumb back to the committed value while the user drags it.
+    if (!self.brightnessSlider.trackingPointer && self.brightnessSlider.doubleValue != controller.selectedBrightnessPercent)
+        self.brightnessSlider.doubleValue = controller.selectedBrightnessPercent;
+    if (self.brightnessSlider.enabled != controller.normalBrightnessAvailable)
+        self.brightnessSlider.enabled = controller.normalBrightnessAvailable;
+    NSString *observed = TBPowerStateName(controller.observedState);
+    TBBrightnessState *brightness = controller.brightnessState;
+    if (!controller.sleeping && controller.observedState == TBPowerStateOn &&
+        !controller.requestedOff && !controller.idleOff && brightness && isfinite(brightness.driverNits)) {
+        observed = [NSString stringWithFormat:@"On · %.0f nits reported%@", brightness.driverNits,
+                    controller.brightnessVerified ? @" · verified" : @""];
+    }
+    TBSetLabelText(self.observedLabel, controller.sleeping
+        ? [NSString stringWithFormat:@"Sleeping · last reported %@", TBPowerStateName(controller.observedState)] : observed);
+    BOOL messageChanged = ![self.messageLabel.stringValue isEqualToString:controller.message];
+    TBSetLabelText(self.messageLabel, controller.message);
+    // The status card already shows a verified level; keep this area for
+    // transitions and actionable problems instead of repeating steady-state text.
+    if (self.messageLabel.hidden != controller.brightnessVerified) self.messageLabel.hidden = controller.brightnessVerified;
+    NSColor *messageColor = controller.failed ? NSColor.systemRedColor : NSColor.labelColor;
+    if (![self.messageLabel.textColor isEqual:messageColor]) self.messageLabel.textColor = messageColor;
+    if (self.offButton.enabled != canRetryOff) self.offButton.enabled = canRetryOff;
+    if (self.onButton.enabled != canTurnOn) self.onButton.enabled = canTurnOn;
     if (messageChanged && controller.failed)
         NSAccessibilityPostNotification(self.messageLabel, NSAccessibilityValueChangedNotification);
 }
@@ -491,6 +510,7 @@ static NSTextField *TBLabel(NSString *text, NSFont *font) {
     [self refreshLoginItem];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
     [self.window makeKeyAndOrderFront:nil];
+    [self refresh];
     [NSApp activateIgnoringOtherApps:YES];
 }
 - (void)runInBackground:(id)sender {
@@ -600,7 +620,7 @@ int main(int argc, const char *argv[]) {
             return state == TBPowerStateUnknown ? 3 : 0;
         }
         if (argc == 2 && strcmp(argv[1], "--version") == 0) {
-            puts("Touch Bar Control 1.3.6");
+            puts("Touch Bar Control 1.3.7");
             return 0;
         }
         if (argc == 2 && strcmp(argv[1], "--help") == 0) {

@@ -23,6 +23,8 @@ FOUNDATION_EXPORT NSString *TBPowerStateName(TBPowerState state);
 - (BOOL)applyNormalBrightnessAtNits:(double)nits;
 - (BOOL)requestImmediateOff;
 - (BOOL)requestOn;
+@optional
+- (void)invalidateCachedServices; // Drop discovery handles across sleep/wake, never cache readings.
 @end
 
 @interface TBRealHardware : NSObject <TBHardware>

@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.3.7 · Optimization · 2026-10-02
+
+- Reduce background work by updating controls only when their values change and refreshing hidden-window controls when reopened. Menu state and protection remain active while the window is closed.
+- Cache IORegistry service handles while reading fresh hardware values. Invalidate handles on termination, failed readings, and sleep/wake; fall back to fresh discovery if notifications are unavailable.
+- Enable `-O2` in release builds and tests without fast-math.
+- Preserve the 100 ms control timer, 55-second inactivity threshold, immediate wake, brightness checks, and bounded retries.
+- Pass 352 assertions covering control safety, wake requests, cache ownership/invalidation, UI updates, background operation, and login items.
+- Verify the installed v1.3.7 build retains one running process across window close, reopen, and Command-Q, preserving the saved brightness and Launch at login setting. Full-system sleep/wake and a fresh login remain untested.
+
+Five paired local benchmark runs compared the v1.3.6 source with these optimizations on an M1 MacBook Pro:
+
+| Workload | Before → after | Time reduction |
+| --- | ---: | ---: |
+| Hidden-window UI refresh | 5.36 → 1.05 µs | 80.5% |
+| Visible-state UI refresh | 5.41 → 4.37 µs | 19.2% |
+| Power-state read | 17.89 → 8.41 µs | 53.0% |
+| Input-idle read | 8.62 → 4.51 µs | 47.7% |
+| Read-only monitoring loop, CPU per tick | 2.016 → 1.782 ms | 11.6% |
+
+These are median operation times and process CPU in a representative read-only workload, not measured battery-life or whole-app CPU improvements. Physical sleep/wake behavior with the optimized build remains unverified. See the [full methodology and limitations](docs/performance.md), [raw measurements](docs/performance-results.json), and [reproducible benchmark command](docs/engineering.md#performance-measurement).
+
 ## 1.3.6 · Quality of Life Changes
 
 - Keep the v1.3.5 control behavior and background operation.
